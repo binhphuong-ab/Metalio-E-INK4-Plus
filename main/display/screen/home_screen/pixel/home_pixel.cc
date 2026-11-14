@@ -2,6 +2,11 @@
 #include "book_screen/book_screen.h"
 #include "book_screen/book_text_util.h"
 #include "workbuddy_screen/workbuddy_screen.h"
+#include "assistant_screen/assistant_screen.h"
+#include "cloud_screen/cloud_screen.h"
+#include "settings_screen/settings_screen.h"
+#include "task_screen/task_screen.h"
+#include "wallpaper_screen/wallpaper_screen.h"
 #include "home_pixel_font.h"
 #include "home_icon_source.h"
 #include "home_screen/home_screen_ui.h"
@@ -51,6 +56,7 @@ const lv_font_t* TextFont() {
 }
 
 void SetText(lv_obj_t* label, const char* text) {
+    if (label == nullptr) return;  // e.g. task counters are not built in METALIO_OFFLINE
     if (std::strcmp(lv_label_get_text(label), text) != 0) lv_label_set_text(label, text);
 }
 
@@ -176,6 +182,8 @@ void Refresh(bool force) {
 }
 } // namespace
 
+const lv_font_t* HomePixel_ClockFont() { return &kPixelClockFont; }
+
 void HomePixel_Stop() {
     if (s.timer != nullptr) lv_timer_delete(s.timer);
     s = PixelUi{};
@@ -220,7 +228,9 @@ void HomePixel_Build(lv_obj_t* screen, lv_coord_t status_height) {
     lv_bar_set_range(s.progress, 0, 1000);
     lv_bar_set_value(s.progress, 0, LV_ANIM_OFF);
 
-    auto* tasks = Card(X(64), Y(658), panel_width, Y(144), kSlashApps[3]);
+#if !METALIO_OFFLINE
+    static const AppEntry task_app = {nullptr, Home_AppNameTask, TaskScreen::Create};
+    auto* tasks = Card(X(64), Y(658), panel_width, Y(144), task_app);
     BlackTab(tasks, Lang::Strings::TASK_TITLE_TODO, false);
     const char* captions[] = {Lang::Strings::HOME_PIXEL_TODAY, Lang::Strings::TASK_TAB_DONE,
                               Lang::Strings::HOME_PIXEL_PENDING};
@@ -240,6 +250,7 @@ void HomePixel_Build(lv_obj_t* screen, lv_coord_t status_height) {
         lv_obj_set_style_border_width(s.counts[i], 1, 0);
         lv_obj_set_style_border_color(s.counts[i], lv_color_black(), 0);
     }
+#endif
 
     s_app_child_start = lv_obj_get_child_count(s.root);
     HomePixel_FillAppsPage();
@@ -252,8 +263,17 @@ void HomePixel_FillAppsPage() {
     while (lv_obj_get_child_count(s.root) > s_app_child_start) {
         lv_obj_delete(lv_obj_get_child(s.root, s_app_child_start));
     }
-    const char* icons[] = {"A:ic_px_book.spng", "A:ic_px_wallpaper.spng", "A:ic_px_ai.spng",
-                           "A:ic_px_task.spng", "A:ic_px_cloud.spng", "A:ic_px_setting.spng"};
+    // Pick the pixel icon/label by screen factory, not array index, so the
+    // app list can shrink (METALIO_OFFLINE) without mislabelling cards.
+    auto pixel_icon = [](const AppEntry& e) -> const char* {
+        if (e.create == BookScreen::Create) return "A:ic_px_book.spng";
+        if (e.create == WallpaperScreen::Create) return "A:ic_px_wallpaper.spng";
+        if (e.create == AssistantScreen::Create) return "A:ic_px_ai.spng";
+        if (e.create == TaskScreen::Create) return "A:ic_px_task.spng";
+        if (e.create == CloudScreen::Create) return "A:ic_px_cloud.spng";
+        if (e.create == SettingsScreen::Create) return "A:ic_px_setting.spng";
+        return e.icon_path;
+    };
     const int columns[] = {64, 334, 605};
     const int edge = X(160);
     const int row_step = edge + (Y(251) - edge) * 2 / 3;
@@ -263,7 +283,7 @@ void HomePixel_FillAppsPage() {
         const bool is_buddy = kSlashApps[app].create == WorkBuddyScreen::Create;
         auto* card = Card(X(columns[i % 3]), Y(882) + (i / 3) * row_step, edge, edge, kSlashApps[app]);
         auto* icon = lv_image_create(card);
-        lv_image_set_src(icon, HomeIconSource(app < 6 ? icons[app] : kSlashApps[app].icon_path));
+        lv_image_set_src(icon, HomeIconSource(pixel_icon(kSlashApps[app])));
         lv_obj_set_style_image_recolor(icon, lv_color_black(), 0);
         lv_obj_set_style_image_recolor_opa(icon, LV_OPA_COVER, 0);
         const int icon_edge = X(100);
@@ -272,8 +292,10 @@ void HomePixel_FillAppsPage() {
         lv_image_set_antialias(icon, false);
         lv_obj_align(icon, LV_ALIGN_CENTER, 0, -Y(6));
         lv_obj_clear_flag(icon, LV_OBJ_FLAG_CLICKABLE);
-        const char* name = is_buddy ? "buddy" : app == 0 ? Lang::Strings::HOME_PIXEL_READ :
-                           app == 3 ? Lang::Strings::HOME_PIXEL_NOTES : kSlashApps[app].name();
+        const char* name = is_buddy ? "buddy" :
+                           kSlashApps[app].create == BookScreen::Create ? Lang::Strings::HOME_PIXEL_READ :
+                           kSlashApps[app].create == TaskScreen::Create ? Lang::Strings::HOME_PIXEL_NOTES :
+                           kSlashApps[app].name();
         BlackTab(card, name, true);
     }
 }

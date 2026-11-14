@@ -36,6 +36,10 @@ private:
     bool continuation_ = false; // 当前段是否已输出过前序片段
     bool last_space_ = true; // 跨输出片段保留空白合并状态
     char quote_ = 0; // 标签属性引号
+    // Subtree that must not render (hidden attr, display:none, nav page-list/landmarks):
+    // tag name of its root and nesting depth of that same tag name.
+    std::string hidden_tag_;
+    int hidden_nest_ = 0;
 };
 
 /** @brief 解码常用 HTML 实体及 Unicode 数字引用。 */

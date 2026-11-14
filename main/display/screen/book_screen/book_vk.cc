@@ -40,6 +40,9 @@
 #include "vk_page_repeat.h"
 
 void RequestOpenAssistantFromBook() {
+#if METALIO_OFFLINE
+    return;  // Ask AI hidden: BOOT long-press in the reader does nothing
+#endif
     const char* screen = VkKey_ActiveScreen();
     if (screen != nullptr && std::strcmp(screen, kScreenRead) == 0) {
         ESP_LOGI(TAG, "AI long (%s) -> release session, assistant", screen);

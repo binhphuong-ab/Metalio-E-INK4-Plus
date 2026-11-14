@@ -1161,6 +1161,13 @@
     X(STANDBY_REQUEST_FAIL, "请求失败", "Request failed") \
     X(STANDBY_WEATHER_FAIL, "天气失败", "Weather failed") \
     X(STANDBY_WP_NOT_FOUND, "未找到待机壁纸", "Standby wallpaper not found") \
+    X(STANDBY_CONTINUE_READING, "继续阅读", "CONTINUE READING") \
+    X(STANDBY_NO_BOOK, "还没有打开过书", "No book opened yet") \
+    X(STANDBY_CLOCK_NOT_SET, "连接 Wi-Fi 以同步时间", "Connect to Wi-Fi to set the clock") \
+    X(STANDBY_BATTERY_FMT, "电量 %d%%", "Battery %d%%") \
+    X(STANDBY_CHARGING_FMT, "充电中 %d%%", "Charging %d%%") \
+    X(BOOK_UP_NEXT, "接下来读", "UP NEXT") \
+    X(BOOK_TIME_READ_FMT, "已读 %s", "%s read") \
     X(WALLPAPER_ADJUST, "调整", "Adjust") \
     X(WALLPAPER_CHIP_SHUTDOWN, "关机", "Power-off") \
     X(WALLPAPER_CHIP_STANDBY, "待机", "Standby") \
@@ -1238,6 +1245,10 @@ LANG_STRING_LIST(LANG_DECL)
 } // namespace Strings
 
 static const char* NormalizeCode(const char* code) {
+#if METALIO_ENGLISH_ONLY
+    (void)code;
+    return "en-US";
+#endif
     if (code != nullptr && std::strcmp(code, "zh-CN") == 0) {
         return "zh-CN";
     }
@@ -1245,6 +1256,10 @@ static const char* NormalizeCode(const char* code) {
 }
 
 static const char* const* LiteralsFor(const char* code) {
+#if METALIO_ENGLISH_ONLY
+    (void)code;
+    return kEn;
+#endif
     if (code != nullptr && std::strcmp(code, "zh-CN") == 0) {
         return kZh;
     }

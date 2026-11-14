@@ -78,6 +78,14 @@ struct StandbyClassicUiState {
     lv_obj_t* weather_temp = nullptr;
     lv_obj_t* todo_host = nullptr;
     lv_obj_t* home_btn = nullptr;
+    // Redesigned standby (date + continue reading + battery)
+    lv_obj_t* wday_lbl = nullptr;
+    lv_obj_t* day_lbl = nullptr;
+    lv_obj_t* month_lbl = nullptr;
+    lv_obj_t* book_title = nullptr;
+    lv_obj_t* book_pct = nullptr;
+    lv_obj_t* book_bar = nullptr;
+    lv_obj_t* batt_lbl = nullptr;
 };
 
 extern const WeatherPhenom kPhenoms[];

@@ -9,3 +9,6 @@ void HomePixel_Stop();
 
 /** @brief 仅更新像素主题底部应用页，保留上方信息 */
 void HomePixel_FillAppsPage();
+
+/** @brief 240px serif digit font (0-9 and ':'), shared so other screens do not duplicate its bitmaps */
+const lv_font_t* HomePixel_ClockFont();

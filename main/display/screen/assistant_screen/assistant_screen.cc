@@ -258,6 +258,9 @@ void AssistantScreen::SyncPttOverlay() {
 }
 
 void AssistantScreen::RequestOpen() {
+#if METALIO_OFFLINE
+    return;  // Ask AI hidden: ignore BOOT long-press shortcuts from home/standby
+#endif
     auto* adapter = LvAdapterEpdiy::Instance();
     if (adapter == nullptr || !adapter->IsReady()) {
         return;

@@ -26,10 +26,20 @@ inline int TextTailBlank(uint32_t cp, const lv_font_glyph_dsc_t& glyph) {
         ? std::max(0, static_cast<int>(glyph.adv_w) - glyph.ofs_x - glyph.box_w - 2) : 0;
 }
 
+// Where justification may add space *before* this glyph. Space-separated scripts
+// (English, Vietnamese) stretch only at spaces; spreading the slack over every
+// letter gap made short lines look letter-spaced ("t h e  t i m e"). CJK and
+// fullwidth text has no spaces, so it keeps distributing between glyphs.
+inline bool JustifySlotBefore(uint32_t cp) {
+    if (cp == ' ') return true;
+    if (cp < 0x2E80) return false;  // Latin, Greek, Cyrillic, punctuation, symbols
+    return !VerticalClosing(cp);
+}
+
 inline void ObserveTextGlyph(TextSpacingState& spacing, const lv_font_t* font, uint32_t cp,
                               const lv_font_glyph_dsc_t& glyph, bool known = true, int letter_gap = 0) {
     spacing.Observe(TextAdvanceWithGap(TextGlyphAdvance(glyph), letter_gap), glyph.ofs_x, glyph.box_w, known,
-        std::max(1, static_cast<int>(font->line_height) / 12), !VerticalClosing(cp),
+        std::max(1, static_cast<int>(font->line_height) / 12), JustifySlotBefore(cp),
         known ? std::max(0, TextTailBlank(cp, glyph) + letter_gap) : 0);
 }
 

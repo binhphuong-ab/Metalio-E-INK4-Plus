@@ -7,6 +7,18 @@
 #include "fontpack_lvgl.h"
 #include "home_icon_source.h"
 
+#if METALIO_OFFLINE
+#include <algorithm>
+#include <cstdio>
+#include <string>
+#include "book_screen/book_screen.h"
+#include "haptic_feedback.h"
+#include "reader/book_home_snapshot.h"
+#include "reader/book_progress_cache.h"
+#include "screen_common.h"
+void HomeHero_BuildContinueCard(lv_obj_t* box);
+#endif
+
 void HomeHero_OnSlashGapDraw(lv_event_t* e) {
     if (lv_event_get_code(e) != LV_EVENT_DRAW_MAIN_END) {
         return;
@@ -94,11 +106,13 @@ void HomeHero_BuildClassicUi(lv_obj_t* parent, lv_coord_t y_offset) {
     lv_obj_clear_flag(date_row, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_clear_flag(date_row, LV_OBJ_FLAG_CLICKABLE);
 
+#if !METALIO_OFFLINE
     lv_obj_t* cal_icon = lv_image_create(date_row);
     lv_image_set_src(cal_icon, HomeIconSource("A:ic_s_standby_calendar.spng"));
     lv_obj_set_size(cal_icon, kCalendarIconW, kCalendarIconH);
     lv_image_set_inner_align(cal_icon, LV_IMAGE_ALIGN_CONTAIN);
     lv_obj_clear_flag(cal_icon, LV_OBJ_FLAG_CLICKABLE);
+#endif
 
     lv_obj_t* date_col = lv_obj_create(date_row);
     lv_obj_remove_style_all(date_col);
@@ -124,6 +138,9 @@ void HomeHero_BuildClassicUi(lv_obj_t* parent, lv_coord_t y_offset) {
     lv_obj_set_style_text_color(HomeHero_State().lunar_lbl, lv_color_black(), 0);
     lv_obj_set_style_text_align(HomeHero_State().lunar_lbl, LV_TEXT_ALIGN_LEFT, 0);
     lv_obj_clear_flag(HomeHero_State().lunar_lbl, LV_OBJ_FLAG_CLICKABLE);
+#if METALIO_OFFLINE
+    lv_obj_add_flag(HomeHero_State().lunar_lbl, LV_OBJ_FLAG_HIDDEN);  // no lunar/weekday line
+#endif
 
     HomeHero_State().meta_split = lv_obj_create(meta_row);
     lv_obj_remove_style_all(HomeHero_State().meta_split);
@@ -171,7 +188,100 @@ void HomeHero_BuildClassicUi(lv_obj_t* parent, lv_coord_t y_offset) {
     lv_obj_set_style_text_font(HomeHero_State().weather_temp, wfont, 0);
     lv_obj_set_style_text_color(HomeHero_State().weather_temp, lv_color_black(), 0);
     lv_obj_clear_flag(HomeHero_State().weather_temp, LV_OBJ_FLAG_CLICKABLE);
+
+#if METALIO_OFFLINE
+    HomeHero_BuildContinueCard(box);
+#endif
 }
+
+#if METALIO_OFFLINE
+// Compact "continue reading" card that fills the gap between the clock and the apps.
+// Tapping it reopens the most recent book. Hidden when nothing has been read yet.
+static void OnContinueCardClicked(lv_event_t* /*e*/) {
+    ScreenNavigateTo(BookScreen::CreateLatest);
+}
+
+void HomeHero_BuildContinueCard(lv_obj_t* box) {
+    const std::string path = reader::book_home_snapshot::LoadLatestAbsPath();
+    if (path.empty()) return;
+    reader::BookSession::ProgressPeek peek;
+    const bool has_progress = reader::book_progress_cache::TryGet(path.c_str(), peek);
+    if (reader::book_progress_cache::IsReady() && !has_progress) return;  // book was removed
+
+    std::string title = path.substr(path.find_last_of('/') + 1);
+    const size_t dot = title.find_last_of('.');
+    if (dot != std::string::npos && dot > 0) title.resize(dot);
+    std::replace(title.begin(), title.end(), '_', ' ');
+
+    const lv_font_t* body = fontpack_lv_font_get(30, 4);
+    if (body == nullptr) body = fontpack_lv_font_ui();
+    const lv_font_t* small = fontpack_lv_font_get(25, 2);
+    if (small == nullptr) small = body;
+    const lv_coord_t w = LV_HOR_RES - 2 * kSidePad;
+    constexpr lv_coord_t kPadIn = 22;
+
+    lv_obj_t* card = lv_obj_create(box);
+    lv_obj_remove_style_all(card);
+    lv_obj_set_size(card, w, LV_SIZE_CONTENT);
+    lv_obj_set_style_margin_top(card, UiSy(26), 0);
+    lv_obj_set_style_bg_color(card, lv_color_white(), 0);
+    lv_obj_set_style_bg_opa(card, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_color(card, lv_color_black(), 0);
+    lv_obj_set_style_border_width(card, 2, 0);
+    lv_obj_set_style_radius(card, 14, 0);
+    lv_obj_set_style_pad_all(card, kPadIn, 0);
+    lv_obj_set_style_pad_row(card, 12, 0);
+    lv_obj_set_flex_flow(card, LV_FLEX_FLOW_COLUMN);
+    lv_obj_clear_flag(card, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(card, LV_OBJ_FLAG_CLICKABLE);
+    HapticAttachClick(card);
+    lv_obj_add_event_cb(card, OnContinueCardClicked, LV_EVENT_CLICKED, nullptr);
+
+    // Row 1: "CONTINUE READING" ............ "42%"
+    lv_obj_t* head = lv_obj_create(card);
+    lv_obj_remove_style_all(head);
+    lv_obj_set_size(head, lv_pct(100), LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(head, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(head, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_clear_flag(head, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_clear_flag(head, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_t* label = lv_label_create(head);
+    lv_label_set_text(label, Lang::Strings::STANDBY_CONTINUE_READING);
+    lv_obj_set_style_text_font(label, small, 0);
+    lv_obj_set_style_text_letter_space(label, 3, 0);
+    lv_obj_set_style_text_color(label, lv_color_black(), 0);
+    lv_obj_clear_flag(label, LV_OBJ_FLAG_CLICKABLE);
+    const int x10 = has_progress && peek.progress_x10 >= 0 ? std::clamp(peek.progress_x10, 0, 1000) : 0;
+    char pct[12];
+    std::snprintf(pct, sizeof(pct), "%d%%", x10 / 10);
+    lv_obj_t* pct_lbl = lv_label_create(head);
+    lv_label_set_text(pct_lbl, pct);
+    lv_obj_set_style_text_font(pct_lbl, small, 0);
+    lv_obj_set_style_text_color(pct_lbl, lv_color_black(), 0);
+    lv_obj_clear_flag(pct_lbl, LV_OBJ_FLAG_CLICKABLE);
+
+    // Row 2: book title (one line)
+    lv_obj_t* title_lbl = lv_label_create(card);
+    lv_label_set_text(title_lbl, title.c_str());
+    lv_obj_set_width(title_lbl, lv_pct(100));
+    lv_label_set_long_mode(title_lbl, LV_LABEL_LONG_DOT);
+    lv_obj_set_style_text_font(title_lbl, body, 0);
+    lv_obj_set_style_text_color(title_lbl, lv_color_black(), 0);
+    lv_obj_clear_flag(title_lbl, LV_OBJ_FLAG_CLICKABLE);
+
+    // Row 3: progress bar
+    lv_obj_t* bar = lv_bar_create(card);
+    lv_obj_remove_style_all(bar);
+    lv_obj_set_size(bar, lv_pct(100), 8);
+    lv_obj_set_style_border_width(bar, 2, LV_PART_MAIN);
+    lv_obj_set_style_border_color(bar, lv_color_black(), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(bar, lv_color_black(), LV_PART_INDICATOR);
+    lv_obj_set_style_bg_opa(bar, LV_OPA_COVER, LV_PART_INDICATOR);
+    lv_obj_clear_flag(bar, LV_OBJ_FLAG_CLICKABLE);
+    lv_bar_set_range(bar, 0, 1000);
+    lv_bar_set_value(bar, x10, LV_ANIM_OFF);
+}
+#endif
 
 void HomeHero_BuildSlashUi(lv_obj_t* parent, lv_coord_t y_offset) {
     lv_obj_t* box = lv_obj_create(parent);

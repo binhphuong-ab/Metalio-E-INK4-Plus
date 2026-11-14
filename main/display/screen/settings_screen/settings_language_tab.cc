@@ -12,15 +12,19 @@ struct SettingsLangOption {
     const char* (*title)(); // 选项标题
 };
 
+#if !METALIO_ENGLISH_ONLY
 static const char* TitleZh() {
     return Lang::Strings::SETTINGS_LANG_ZH_CN;
 }
+#endif
 static const char* TitleEn() {
     return Lang::Strings::SETTINGS_LANG_EN_US;
 }
 
 static constexpr SettingsLangOption kLangOptions[] = {
+#if !METALIO_ENGLISH_ONLY
     {"zh-CN", TitleZh},
+#endif
     {"en-US", TitleEn},
 };
 static constexpr int kLangOptionCount = sizeof(kLangOptions) / sizeof(kLangOptions[0]);

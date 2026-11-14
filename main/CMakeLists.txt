@@ -361,6 +361,20 @@ if(CONFIG_BOARD_TYPE_METALIO_E_INK4_PLUS_GLOBAL)
     target_compile_definitions(${COMPONENT_LIB} PRIVATE LANG_DEFAULT_CODE="en-US")
 endif()
 
+# Offline build: cloud endpoints are blank in the open-source tree, so hide the
+# features that depend on them (Ask AI, WorkBuddy, Tasks, weather). Build with
+# -DMETALIO_OFFLINE=0 to restore the stock app set.
+if(NOT DEFINED METALIO_OFFLINE)
+    set(METALIO_OFFLINE 1)
+endif()
+target_compile_definitions(${COMPONENT_LIB} PRIVATE METALIO_OFFLINE=${METALIO_OFFLINE})
+
+# English-only UI: Chinese is never selectable or restored from NVS.
+if(NOT DEFINED METALIO_ENGLISH_ONLY)
+    set(METALIO_ENGLISH_ONLY 1)
+endif()
+target_compile_definitions(${COMPONENT_LIB} PRIVATE METALIO_ENGLISH_ONLY=${METALIO_ENGLISH_ONLY})
+
 # I1 is the default fast UI path; native L8 is used only for opted-in content.
 # Keep both blend kernels optimized, with the original binary fill/copy helpers.
 foreach(_lvgl_comp lvgl__lvgl lvgl)

@@ -94,7 +94,9 @@ static constexpr SettingsTabEntry kTabs[] = {
     {SettingsTab::kPower, TabNamePower},
     {SettingsTab::kCharging, TabNameCharging},
     {SettingsTab::kFrontlight, TabNameFrontlight},
-    {SettingsTab::kConversation, TabNameConversation},
+#if !METALIO_OFFLINE
+    {SettingsTab::kConversation, TabNameConversation},  // AI voice + cloud provider
+#endif
     {SettingsTab::kBluetooth, TabNameBluetooth},
     {SettingsTab::kPager, TabNamePager},
     {SettingsTab::kTest, TabNameTest},

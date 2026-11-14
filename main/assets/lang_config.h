@@ -1,7 +1,7 @@
 #pragma once
 
 #ifndef LANG_DEFAULT_CODE
-#define LANG_DEFAULT_CODE "zh-CN"
+#define LANG_DEFAULT_CODE "en-US"
 #endif
 
 namespace Lang {
@@ -746,6 +746,13 @@ extern const char* STANDBY_PARSE_FAIL;
 extern const char* STANDBY_REQUEST_FAIL;
 extern const char* STANDBY_WEATHER_FAIL;
 extern const char* STANDBY_WP_NOT_FOUND;
+extern const char* STANDBY_CONTINUE_READING;
+extern const char* STANDBY_NO_BOOK;
+extern const char* STANDBY_CLOCK_NOT_SET;
+extern const char* STANDBY_BATTERY_FMT;
+extern const char* STANDBY_CHARGING_FMT;
+extern const char* BOOK_UP_NEXT;
+extern const char* BOOK_TIME_READ_FMT;
 extern const char* WALLPAPER_ADJUST;
 extern const char* WALLPAPER_CHIP_SHUTDOWN;
 extern const char* WALLPAPER_CHIP_STANDBY;

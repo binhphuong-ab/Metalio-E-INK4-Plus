@@ -40,7 +40,27 @@ inline bool VerticalClosing(uint32_t cp) {
     }
 }
 
+// Letters of space-separated scripts (Latin incl. Vietnamese, Greek, Cyrillic),
+// digits and combining marks. CJK is excluded: it may break between any two glyphs.
+inline bool IsWordChar(uint32_t cp) {
+    if (cp < 0x80) {
+        return (cp >= '0' && cp <= '9') || (cp >= 'A' && cp <= 'Z') || (cp >= 'a' && cp <= 'z');
+    }
+    if (cp == 0xD7 || cp == 0xF7) return false;  // × ÷
+    return (cp >= 0xC0 && cp <= 0x24F) ||        // Latin-1 letters, Latin Extended-A/B (ă đ ơ ư)
+           (cp >= 0x250 && cp <= 0x2AF) ||       // IPA
+           (cp >= 0x300 && cp <= 0x36F) ||       // combining marks (decomposed Vietnamese tones)
+           (cp >= 0x370 && cp <= 0x3FF) ||       // Greek
+           (cp >= 0x400 && cp <= 0x52F) ||       // Cyrillic
+           (cp >= 0x1E00 && cp <= 0x1EFF);       // Latin Extended Additional (ạ ế ờ ự ...)
+}
+
 inline bool VerticalCanBreak(uint32_t before, uint32_t after) {
+    // Never split a word: "nhiệt", "don't" / "don’t" stay on one line. Words longer
+    // than a whole line still wrap via the paginator's capacity fallback.
+    if (IsWordChar(after) && (IsWordChar(before) || before == '\'' || before == 0x2019)) {
+        return false;
+    }
     return !VerticalOpening(before) && !VerticalClosing(after) &&
         !(before == after && (before == 0x2014 || before == 0x2026));
 }

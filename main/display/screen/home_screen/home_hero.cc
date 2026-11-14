@@ -77,8 +77,18 @@ void HomeHero_FormatClassicClock(char* time_buf, size_t time_len, char* date_buf
         return;
     }
     std::snprintf(time_buf, time_len, "%02d:%02d", tm_info.tm_hour, tm_info.tm_min);
+#if METALIO_ENGLISH_ONLY
+    // "Friday, 14 November" reads better under the big clock than "11/14".
+    static const char* const kDays[] = {"Sunday", "Monday", "Tuesday", "Wednesday",
+                                        "Thursday", "Friday", "Saturday"};
+    static const char* const kMonths[] = {"January", "February", "March", "April", "May", "June", "July",
+                                          "August", "September", "October", "November", "December"};
+    std::snprintf(date_buf, date_len, "%s, %d %s", kDays[tm_info.tm_wday % 7], tm_info.tm_mday,
+                  kMonths[tm_info.tm_mon % 12]);
+#else
     std::snprintf(date_buf, date_len, Lang::Strings::HOME_DATE_FMT, tm_info.tm_mon + 1,
                   tm_info.tm_mday);
+#endif
 }
 
 void HomeHero_FormatSlashClock(char* hour_buf, size_t hour_len, char* min_buf, size_t min_len,

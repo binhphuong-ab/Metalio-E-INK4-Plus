@@ -5,83 +5,205 @@
 #include "standby_classic_weather_store.h"
 #include "standby_classic_weather_fetch.h"
 #include "standby_classic_todos.h"
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <ctime>
+#include <string>
 
 #include <esp_log.h>
 #include <lvgl.h>
 
 #include "assets/lang_config.h"
+#include "assets/lang_reader.h"
+#include "board.h"
+#include "fontpack_lvgl.h"
 #include "haptic_feedback.h"
 #include "home_icon_source.h"
+#include "home_screen/pixel/home_pixel.h"
+#include "reader/book_home_snapshot.h"
+#include "reader/book_progress_cache.h"
+
+// ---------------------------------------------------------------------------
+// Standby screen, redesigned: a typographic "reader's calendar".
+//
+//   FRIDAY                      weekday, letter-spaced caps
+//   14                          240px serif day number (shared pixel clock font)
+//   NOVEMBER 2026
+//   ───────────────────────     rule
+//   CONTINUE READING
+//   Book title, up to two lines
+//   ██████████░░░░░░░░  42%
+//
+//   [   menu   ]                home button (full-screen mode only)
+//   ───────────────────────
+//   Battery 82%     This week 2h 15m
+//
+// No bitmap text: every string comes from the translation table, so the screen
+// follows the UI language. Weather and to-dos are gone (cloud-only features).
+// ---------------------------------------------------------------------------
+
+namespace {
+
+constexpr lv_coord_t kPad = 48;          // side margin
+constexpr lv_coord_t kTopY = 76;         // top of the date block
+constexpr lv_coord_t kRuleH = 3;         // section rule thickness
+constexpr lv_coord_t kBarH = 10;         // progress bar height
+constexpr lv_coord_t kFooterPad = 36;    // footer distance from bottom
+constexpr lv_coord_t kHomeBtnHeight = 64;
+
+const char* const kWeekdayEn[] = {"SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY",
+                                  "THURSDAY", "FRIDAY", "SATURDAY"};
+const char* const kMonthEn[] = {"JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY",
+                                "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"};
+
+bool IsZh() { return std::strcmp(Lang::CODE, "zh-CN") == 0; }
+
+const lv_font_t* BodyFont() {
+    const lv_font_t* f = fontpack_lv_font_get(30, 4);
+    return f != nullptr ? f : fontpack_lv_font_ui();
+}
+
+const lv_font_t* SmallFont() {
+    const lv_font_t* f = fontpack_lv_font_get(25, 2);
+    return f != nullptr ? f : BodyFont();
+}
+
+lv_obj_t* Box(lv_obj_t* parent) {
+    lv_obj_t* o = lv_obj_create(parent);
+    lv_obj_remove_style_all(o);
+    lv_obj_set_style_bg_opa(o, LV_OPA_TRANSP, 0);
+    lv_obj_clear_flag(o, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_clear_flag(o, LV_OBJ_FLAG_CLICKABLE);
+    return o;
+}
+
+lv_obj_t* Label(lv_obj_t* parent, const lv_font_t* font, const char* text, lv_coord_t letter_space = 0) {
+    lv_obj_t* l = lv_label_create(parent);
+    lv_label_set_text(l, text);
+    lv_obj_set_style_text_font(l, font, 0);
+    lv_obj_set_style_text_color(l, lv_color_black(), 0);
+    lv_obj_set_style_text_letter_space(l, letter_space, 0);
+    lv_obj_clear_flag(l, LV_OBJ_FLAG_CLICKABLE);
+    return l;
+}
+
+lv_obj_t* Rule(lv_obj_t* parent, lv_coord_t width, lv_coord_t height) {
+    lv_obj_t* r = Box(parent);
+    lv_obj_set_size(r, width, height);
+    lv_obj_set_style_bg_color(r, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(r, LV_OPA_COVER, 0);
+    return r;
+}
+
+// "/sdcard/metalio/e-ink/books/The_Great_Gatsby.epub" -> "The Great Gatsby"
+std::string TitleFromPath(const std::string& path) {
+    std::string name = path.substr(path.find_last_of('/') + 1);
+    const size_t dot = name.find_last_of('.');
+    if (dot != std::string::npos && dot > 0) name.resize(dot);
+    std::replace(name.begin(), name.end(), '_', ' ');
+    return name;
+}
+
+void RefreshReading() {
+    auto& st = StandbyClassic_State();
+    if (st.book_title == nullptr) return;
+
+    const std::string path = reader::book_home_snapshot::LoadLatestAbsPath();
+    reader::BookSession::ProgressPeek peek;
+    const bool has_progress = !path.empty() && reader::book_progress_cache::TryGet(path.c_str(), peek);
+    const bool has_book = !path.empty() && (has_progress || !reader::book_progress_cache::IsReady());
+
+    if (!has_book) {
+        lv_label_set_text(st.book_title, Lang::Strings::STANDBY_NO_BOOK);
+        lv_obj_add_flag(st.book_bar, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(st.book_pct, LV_OBJ_FLAG_HIDDEN);
+        return;
+    }
+    lv_label_set_text(st.book_title, TitleFromPath(path).c_str());
+    if (has_progress && peek.progress_x10 >= 0) {
+        const int x10 = std::clamp(peek.progress_x10, 0, 1000);
+        lv_bar_set_value(st.book_bar, x10, LV_ANIM_OFF);
+        char pct[12];
+        std::snprintf(pct, sizeof(pct), "%d%%", x10 / 10);
+        lv_label_set_text(st.book_pct, pct);
+    } else {
+        lv_bar_set_value(st.book_bar, 0, LV_ANIM_OFF);
+        lv_label_set_text(st.book_pct, "--");
+    }
+}
+
+void RefreshFooter(lv_obj_t* week_lbl) {
+    auto& st = StandbyClassic_State();
+    if (st.batt_lbl != nullptr) {
+        int level = 0;
+        bool charging = false, discharging = false;
+        if (Board::GetInstance().GetBatteryLevel(level, charging, discharging) && level >= 0) {
+            char buf[32];
+            std::snprintf(buf, sizeof(buf),
+                          charging ? Lang::Strings::STANDBY_CHARGING_FMT : Lang::Strings::STANDBY_BATTERY_FMT,
+                          level);
+            lv_label_set_text(st.batt_lbl, buf);
+        } else {
+            lv_label_set_text(st.batt_lbl, "");
+        }
+    }
+    if (week_lbl != nullptr) {
+        const auto week = reader::book_home_snapshot::LoadWeekStats();
+        if (week.valid && week.total_seconds > 0) {
+            const unsigned minutes = static_cast<unsigned>(week.total_seconds / 60);
+            char dur[24];
+            std::snprintf(dur, sizeof(dur), Lang::Strings::BOOK_DURATION_HM_FMT, minutes / 60, minutes % 60);
+            char buf[64];
+            std::snprintf(buf, sizeof(buf), "%s  %s", Lang::Strings::BOOK_WEEK_READING, dur);
+            lv_label_set_text(week_lbl, buf);
+        } else {
+            lv_label_set_text(week_lbl, "");
+        }
+    }
+}
+
+lv_obj_t* s_week_lbl = nullptr;
+
+} // namespace
 
 void StandbyClassic_RefreshDateOnce() {
-    if (StandbyClassic_State().date_lbl == nullptr) {
+    auto& st = StandbyClassic_State();
+    if (st.day_lbl == nullptr) {
         return;
     }
     time_t now = time(nullptr);
     struct tm tm_info = {};
     if (localtime_r(&now, &tm_info) == nullptr || tm_info.tm_year < (2020 - 1900)) {
-        lv_label_set_text(StandbyClassic_State().date_lbl, Lang::Strings::STANDBY_DATE_PLACEHOLDER);
+        // Clock not set yet (RTC lost power, no NTP): say so instead of showing a fake date.
+        lv_label_set_text(st.wday_lbl, "");
+        lv_obj_add_flag(st.day_lbl, LV_OBJ_FLAG_HIDDEN);
+        lv_label_set_text(st.month_lbl, Lang::Strings::STANDBY_CLOCK_NOT_SET);
+        lv_obj_set_style_text_letter_space(st.month_lbl, 0, 0);
         return;
     }
-    char date_str[48];
-    std::snprintf(date_str, sizeof(date_str), Lang::Strings::STANDBY_DATE_FMT, tm_info.tm_mon + 1,
-                  tm_info.tm_mday);
-    lv_label_set_text(StandbyClassic_State().date_lbl, date_str);
+    char day[4];
+    std::snprintf(day, sizeof(day), "%d", tm_info.tm_mday);
+    lv_label_set_text(st.day_lbl, day);
+    lv_obj_remove_flag(st.day_lbl, LV_OBJ_FLAG_HIDDEN);
+
+    char month[40];
+    if (IsZh()) {
+        static const char* const kWdayZh[] = {Lang::Strings::HOME_WDAY_SUN, Lang::Strings::HOME_WDAY_MON,
+                                              Lang::Strings::HOME_WDAY_TUE, Lang::Strings::HOME_WDAY_WED,
+                                              Lang::Strings::HOME_WDAY_THU, Lang::Strings::HOME_WDAY_FRI,
+                                              Lang::Strings::HOME_WDAY_SAT};
+        lv_label_set_text(st.wday_lbl, kWdayZh[tm_info.tm_wday % 7]);
+        std::snprintf(month, sizeof(month), "%d年%d月", tm_info.tm_year + 1900, tm_info.tm_mon + 1);
+    } else {
+        lv_label_set_text(st.wday_lbl, kWeekdayEn[tm_info.tm_wday % 7]);
+        std::snprintf(month, sizeof(month), "%s %d", kMonthEn[tm_info.tm_mon % 12], tm_info.tm_year + 1900);
+    }
+    lv_label_set_text(st.month_lbl, month);
 }
 
 void StandbyClassic_ApplyWeatherUi() {
-    if (!StandbyClassic_alive || StandbyClassic_State().weather_row == nullptr) {
-        return;
-    }
-    const WeatherSnap snap = StandbyClassic_WeatherRamCopy();
-    if (!snap.valid) {
-        lv_obj_add_flag(StandbyClassic_State().weather_row, LV_OBJ_FLAG_HIDDEN);
-        if (StandbyClassic_State().meta_split != nullptr) {
-            lv_obj_add_flag(StandbyClassic_State().meta_split, LV_OBJ_FLAG_HIDDEN);
-        }
-        if (StandbyClassic_State().lunar_lbl != nullptr) {
-            lv_label_set_text(StandbyClassic_State().lunar_lbl, "");
-        }
-        return;
-    }
-
-    if (StandbyClassic_State().lunar_lbl != nullptr) {
-        char sub[24];
-        StandbyClassic_FormatLunarOrWeekday(sub, sizeof(sub), snap.lunar);
-        lv_label_set_text(StandbyClassic_State().lunar_lbl, sub);
-    }
-    if (StandbyClassic_State().weather_text != nullptr) {
-        lv_label_set_text(StandbyClassic_State().weather_text, StandbyClassic_LocalizedPhenomText(snap));
-    }
-    if (StandbyClassic_State().weather_temp != nullptr) {
-        if (snap.has_temp) {
-            char buf[16];
-            std::snprintf(buf, sizeof(buf), "%d℃", snap.temp);
-            lv_label_set_text(StandbyClassic_State().weather_temp, buf);
-        } else {
-            lv_label_set_text(StandbyClassic_State().weather_temp, "");
-        }
-    }
-    if (StandbyClassic_State().weather_icon != nullptr) {
-        if (snap.icon_code[0] != '\0') {
-            char path[48];
-            std::snprintf(path, sizeof(path), "A:ic_s_weather_%s.spng", snap.icon_code);
-            if (HomeIconSetFullSource(StandbyClassic_State().weather_icon, path)) {
-                lv_obj_remove_flag(StandbyClassic_State().weather_icon, LV_OBJ_FLAG_HIDDEN);
-            } else {
-                lv_obj_add_flag(StandbyClassic_State().weather_icon, LV_OBJ_FLAG_HIDDEN);
-            }
-        } else {
-            lv_obj_add_flag(StandbyClassic_State().weather_icon, LV_OBJ_FLAG_HIDDEN);
-        }
-    }
-    lv_obj_remove_flag(StandbyClassic_State().weather_row, LV_OBJ_FLAG_HIDDEN);
-    if (StandbyClassic_State().meta_split != nullptr) {
-        lv_obj_remove_flag(StandbyClassic_State().meta_split, LV_OBJ_FLAG_HIDDEN);
-    }
+    // Weather removed from the redesigned standby screen; kept as a no-op for listeners.
 }
 
 void StandbyClassic_BuildUi(lv_obj_t* root) {
@@ -92,199 +214,116 @@ void StandbyClassic_BuildUi(lv_obj_t* root) {
     lv_obj_clear_flag(root, LV_OBJ_FLAG_SCROLLABLE);
 
     StandbyClassic_todos.clear();
+    auto& st = StandbyClassic_State();
 
-    const lv_coord_t content_w = LV_HOR_RES - 2 * kSidePad;
-    const lv_coord_t content_h = LV_VER_RES - kTopPad;
+    const lv_coord_t W = LV_HOR_RES;
+    const lv_coord_t H = LV_VER_RES;
+    const lv_coord_t cw = W - 2 * kPad;
+    const lv_font_t* body = BodyFont();
+    const lv_font_t* small = SmallFont();
 
-    lv_obj_t* center = lv_obj_create(root);
-    lv_obj_remove_style_all(center);
-    lv_obj_set_size(center, content_w, content_h);
-    lv_obj_align(center, LV_ALIGN_TOP_MID, 0, kTopPad);
-    lv_obj_set_style_bg_opa(center, LV_OPA_TRANSP, 0);
-    lv_obj_set_flex_flow(center, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(center, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_row(center, 0, 0);
-    lv_obj_clear_flag(center, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_clear_flag(center, LV_OBJ_FLAG_CLICKABLE);
-    // 猫图宽=可绘区，略宽于 center 侧边距；允许溢出绘制
-    lv_obj_add_flag(center, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
+    // ---- Top block: date + continue reading -------------------------------
+    lv_obj_t* top = Box(root);
+    lv_obj_set_size(top, cw, LV_SIZE_CONTENT);
+    lv_obj_set_pos(top, kPad, kTopY);
+    lv_obj_set_flex_flow(top, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(top, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+    lv_obj_set_style_pad_row(top, 0, 0);
 
-    lv_obj_t* spacer = lv_obj_create(center);
-    lv_obj_remove_style_all(spacer);
-    lv_obj_set_width(spacer, lv_pct(100));
-    lv_obj_set_flex_grow(spacer, 1);
-    lv_obj_set_style_bg_opa(spacer, LV_OPA_TRANSP, 0);
-    lv_obj_clear_flag(spacer, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_clear_flag(spacer, LV_OBJ_FLAG_SCROLLABLE);
+    st.wday_lbl = Label(top, body, "", 6);
 
-    lv_obj_t* meta_row = lv_obj_create(center);
-    lv_obj_remove_style_all(meta_row);
-    lv_obj_set_width(meta_row, lv_pct(100));
-    lv_obj_set_height(meta_row, LV_SIZE_CONTENT);
-    lv_obj_set_style_bg_opa(meta_row, LV_OPA_TRANSP, 0);
-    lv_obj_set_flex_flow(meta_row, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(meta_row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER,
-                          LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_column(meta_row, kMetaGap, 0);
-    lv_obj_set_style_margin_bottom(meta_row, kSectionGap, 0);
-    lv_obj_clear_flag(meta_row, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_clear_flag(meta_row, LV_OBJ_FLAG_CLICKABLE);
+    st.day_lbl = Label(top, HomePixel_ClockFont(), "");
+    lv_obj_set_style_margin_top(st.day_lbl, 4, 0);
+    lv_obj_set_style_translate_x(st.day_lbl, -6, 0);  // optical alignment of the serif digits
 
-    lv_obj_t* date_row = lv_obj_create(meta_row);
-    lv_obj_remove_style_all(date_row);
-    lv_obj_set_size(date_row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-    lv_obj_set_style_bg_opa(date_row, LV_OPA_TRANSP, 0);
-    lv_obj_set_flex_flow(date_row, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(date_row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_column(date_row, kCalendarGap, 0);
-    lv_obj_clear_flag(date_row, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_clear_flag(date_row, LV_OBJ_FLAG_CLICKABLE);
+    st.month_lbl = Label(top, body, Lang::Strings::STANDBY_DATE_PLACEHOLDER, 4);
+    lv_obj_set_width(st.month_lbl, cw);
+    lv_label_set_long_mode(st.month_lbl, LV_LABEL_LONG_WRAP);
 
-    lv_obj_t* cal_icon = lv_image_create(date_row);
-    lv_image_set_src(cal_icon, HomeIconSource("A:ic_s_standby_calendar.spng"));
-    lv_obj_set_size(cal_icon, kCalendarIconW, kCalendarIconH);
-    lv_image_set_inner_align(cal_icon, LV_IMAGE_ALIGN_CONTAIN);
-    lv_obj_clear_flag(cal_icon, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_t* rule = Rule(top, cw, kRuleH);
+    lv_obj_set_style_margin_top(rule, 44, 0);
 
-    lv_obj_t* date_col = lv_obj_create(date_row);
-    lv_obj_remove_style_all(date_col);
-    lv_obj_set_size(date_col, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-    lv_obj_set_style_bg_opa(date_col, LV_OPA_TRANSP, 0);
-    lv_obj_set_flex_flow(date_col, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(date_col, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
-    lv_obj_set_style_pad_row(date_col, 4, 0);
-    lv_obj_clear_flag(date_col, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_clear_flag(date_col, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_t* cont = Label(top, small, Lang::Strings::STANDBY_CONTINUE_READING, 4);
+    lv_obj_set_style_margin_top(cont, 40, 0);
 
-    const lv_font_t* wfont = StandbyClassic_WeatherFont();
-    StandbyClassic_State().date_lbl = lv_label_create(date_col);
-    lv_label_set_text(StandbyClassic_State().date_lbl, Lang::Strings::STANDBY_DATE_PLACEHOLDER);
-    lv_obj_set_style_text_font(StandbyClassic_State().date_lbl, wfont, 0);
-    lv_obj_set_style_text_color(StandbyClassic_State().date_lbl, lv_color_black(), 0);
-    lv_obj_set_style_text_align(StandbyClassic_State().date_lbl, LV_TEXT_ALIGN_LEFT, 0);
-    lv_obj_clear_flag(StandbyClassic_State().date_lbl, LV_OBJ_FLAG_CLICKABLE);
+    st.book_title = Label(top, body, "");
+    lv_obj_set_width(st.book_title, cw);
+    lv_obj_set_height(st.book_title, 2 * lv_font_get_line_height(body) + 4);
+    lv_label_set_long_mode(st.book_title, LV_LABEL_LONG_DOT);
+    lv_obj_set_style_margin_top(st.book_title, 14, 0);
 
-    StandbyClassic_State().lunar_lbl = lv_label_create(date_col);
-    lv_label_set_text(StandbyClassic_State().lunar_lbl, "");
-    lv_obj_set_style_text_font(StandbyClassic_State().lunar_lbl, wfont, 0);
-    lv_obj_set_style_text_color(StandbyClassic_State().lunar_lbl, lv_color_black(), 0);
-    lv_obj_set_style_text_align(StandbyClassic_State().lunar_lbl, LV_TEXT_ALIGN_LEFT, 0);
-    lv_obj_clear_flag(StandbyClassic_State().lunar_lbl, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_t* prog_row = Box(top);
+    lv_obj_set_size(prog_row, cw, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(prog_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(prog_row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(prog_row, 20, 0);
+    lv_obj_set_style_margin_top(prog_row, 18, 0);
 
-    StandbyClassic_State().meta_split = lv_obj_create(meta_row);
-    lv_obj_remove_style_all(StandbyClassic_State().meta_split);
-    lv_obj_set_size(StandbyClassic_State().meta_split, kMetaSplitW, kWeatherIcon);
-    lv_obj_set_style_bg_color(StandbyClassic_State().meta_split, lv_color_black(), 0);
-    lv_obj_set_style_bg_opa(StandbyClassic_State().meta_split, LV_OPA_COVER, 0);
-    lv_obj_clear_flag(StandbyClassic_State().meta_split, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_add_flag(StandbyClassic_State().meta_split, LV_OBJ_FLAG_HIDDEN);
+    st.book_bar = lv_bar_create(prog_row);
+    lv_obj_remove_style_all(st.book_bar);
+    lv_obj_set_height(st.book_bar, kBarH);
+    lv_obj_set_flex_grow(st.book_bar, 1);
+    lv_obj_set_style_border_width(st.book_bar, 2, LV_PART_MAIN);
+    lv_obj_set_style_border_color(st.book_bar, lv_color_black(), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(st.book_bar, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(st.book_bar, lv_color_black(), LV_PART_INDICATOR);
+    lv_obj_set_style_bg_opa(st.book_bar, LV_OPA_COVER, LV_PART_INDICATOR);
+    lv_obj_set_style_radius(st.book_bar, 0, LV_PART_MAIN);
+    lv_obj_set_style_radius(st.book_bar, 0, LV_PART_INDICATOR);
+    lv_obj_clear_flag(st.book_bar, LV_OBJ_FLAG_CLICKABLE);
+    lv_bar_set_range(st.book_bar, 0, 1000);
+    lv_bar_set_value(st.book_bar, 0, LV_ANIM_OFF);
 
-    StandbyClassic_State().weather_row = lv_obj_create(meta_row);
-    lv_obj_remove_style_all(StandbyClassic_State().weather_row);
-    lv_obj_set_size(StandbyClassic_State().weather_row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-    lv_obj_set_style_bg_opa(StandbyClassic_State().weather_row, LV_OPA_TRANSP, 0);
-    lv_obj_set_flex_flow(StandbyClassic_State().weather_row, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(StandbyClassic_State().weather_row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
-                          LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_column(StandbyClassic_State().weather_row, kWeatherGap, 0);
-    lv_obj_clear_flag(StandbyClassic_State().weather_row, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_clear_flag(StandbyClassic_State().weather_row, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_add_flag(StandbyClassic_State().weather_row, LV_OBJ_FLAG_HIDDEN);
+    st.book_pct = Label(prog_row, body, "--");
 
-    StandbyClassic_State().weather_icon = lv_image_create(StandbyClassic_State().weather_row);
-    lv_obj_set_size(StandbyClassic_State().weather_icon, kWeatherIcon, kWeatherIcon);
-    lv_image_set_inner_align(StandbyClassic_State().weather_icon, LV_IMAGE_ALIGN_CONTAIN);
-    lv_obj_clear_flag(StandbyClassic_State().weather_icon, LV_OBJ_FLAG_CLICKABLE);
+    // ---- Bottom block: home button + footer -------------------------------
+    lv_obj_t* bottom = Box(root);
+    lv_obj_set_size(bottom, cw, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(bottom, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(bottom, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+    lv_obj_set_style_pad_row(bottom, 0, 0);
+    lv_obj_align(bottom, LV_ALIGN_BOTTOM_LEFT, kPad, -kFooterPad);
 
-    lv_obj_t* meta = lv_obj_create(StandbyClassic_State().weather_row);
-    lv_obj_remove_style_all(meta);
-    lv_obj_set_size(meta, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-    lv_obj_set_style_bg_opa(meta, LV_OPA_TRANSP, 0);
-    lv_obj_set_flex_flow(meta, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(meta, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
-    lv_obj_set_style_pad_row(meta, 4, 0);
-    lv_obj_clear_flag(meta, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_clear_flag(meta, LV_OBJ_FLAG_CLICKABLE);
-
-    StandbyClassic_State().weather_text = lv_label_create(meta);
-    lv_label_set_text(StandbyClassic_State().weather_text, "");
-    lv_obj_set_style_text_font(StandbyClassic_State().weather_text, wfont, 0);
-    lv_obj_set_style_text_color(StandbyClassic_State().weather_text, lv_color_black(), 0);
-    lv_obj_clear_flag(StandbyClassic_State().weather_text, LV_OBJ_FLAG_CLICKABLE);
-
-    StandbyClassic_State().weather_temp = lv_label_create(meta);
-    lv_label_set_text(StandbyClassic_State().weather_temp, "");
-    lv_obj_set_style_text_font(StandbyClassic_State().weather_temp, wfont, 0);
-    lv_obj_set_style_text_color(StandbyClassic_State().weather_temp, lv_color_black(), 0);
-    lv_obj_clear_flag(StandbyClassic_State().weather_temp, LV_OBJ_FLAG_CLICKABLE);
-
-    StandbyClassic_State().todo_host = lv_obj_create(center);
-    lv_obj_remove_style_all(StandbyClassic_State().todo_host);
-    lv_obj_set_width(StandbyClassic_State().todo_host, lv_pct(100));
-    lv_obj_set_height(StandbyClassic_State().todo_host, LV_SIZE_CONTENT);
-    lv_obj_set_style_bg_opa(StandbyClassic_State().todo_host, LV_OPA_TRANSP, 0);
-    lv_obj_set_flex_flow(StandbyClassic_State().todo_host, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(StandbyClassic_State().todo_host, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
-                          LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_row(StandbyClassic_State().todo_host, kTodoGap, 0);
-    lv_obj_set_style_margin_bottom(StandbyClassic_State().todo_host, kSectionGap, 0);
-    lv_obj_clear_flag(StandbyClassic_State().todo_host, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_clear_flag(StandbyClassic_State().todo_host, LV_OBJ_FLAG_CLICKABLE);
-
-    StandbyClassic_State().home_btn = lv_obj_create(center);
-    lv_obj_remove_style_all(StandbyClassic_State().home_btn);
-    lv_obj_set_size(StandbyClassic_State().home_btn, content_w, kHomeBtnH);
-    lv_obj_set_style_bg_color(StandbyClassic_State().home_btn, lv_color_white(), 0);
-    lv_obj_set_style_bg_opa(StandbyClassic_State().home_btn, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_color(StandbyClassic_State().home_btn, lv_color_black(), 0);
-    lv_obj_set_style_border_width(StandbyClassic_State().home_btn, kBorderW, 0);
-    lv_obj_set_style_radius(StandbyClassic_State().home_btn, 8, 0);
-    lv_obj_set_style_margin_bottom(StandbyClassic_State().home_btn, kHeroSectionGap, 0);
-    lv_obj_clear_flag(StandbyClassic_State().home_btn, LV_OBJ_FLAG_SCROLLABLE);
+    st.home_btn = Box(bottom);
+    lv_obj_set_size(st.home_btn, cw, kHomeBtnHeight);
+    lv_obj_set_style_bg_color(st.home_btn, lv_color_white(), 0);
+    lv_obj_set_style_bg_opa(st.home_btn, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_color(st.home_btn, lv_color_black(), 0);
+    lv_obj_set_style_border_width(st.home_btn, 2, 0);
+    lv_obj_set_style_radius(st.home_btn, kHomeBtnHeight / 2, 0);
+    lv_obj_set_style_margin_bottom(st.home_btn, 40, 0);
     if (!StandbyClassic_as_overlay) {
-        lv_obj_add_flag(StandbyClassic_State().home_btn, LV_OBJ_FLAG_CLICKABLE);
-        HapticAttachClick(StandbyClassic_State().home_btn);
-        lv_obj_add_event_cb(StandbyClassic_State().home_btn, StandbyClassic_OnHomeBtnClicked, LV_EVENT_CLICKED, nullptr);
+        lv_obj_add_flag(st.home_btn, LV_OBJ_FLAG_CLICKABLE);
+        HapticAttachClick(st.home_btn);
+        lv_obj_add_event_cb(st.home_btn, StandbyClassic_OnHomeBtnClicked, LV_EVENT_CLICKED, nullptr);
+        lv_obj_t* menu_icon = lv_image_create(st.home_btn);
+        lv_image_set_src(menu_icon, "A:ic_s_standby_menu.spng");
+        lv_obj_set_size(menu_icon, kMenuIcon, kMenuIcon);
+        lv_obj_center(menu_icon);
+        lv_obj_clear_flag(menu_icon, LV_OBJ_FLAG_CLICKABLE);
     } else {
-        lv_obj_add_flag(StandbyClassic_State().home_btn, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_clear_flag(StandbyClassic_State().home_btn, LV_OBJ_FLAG_CLICKABLE);
-        lv_obj_set_style_margin_bottom(StandbyClassic_State().home_btn, 0, 0);
+        lv_obj_add_flag(st.home_btn, LV_OBJ_FLAG_HIDDEN);
     }
 
-    lv_obj_t* menu_icon = lv_image_create(StandbyClassic_State().home_btn);
-    lv_image_set_src(menu_icon, "A:ic_s_standby_menu.spng");
-    lv_obj_set_size(menu_icon, kMenuIcon, kMenuIcon);
-    lv_obj_center(menu_icon);
-    lv_obj_clear_flag(menu_icon, LV_OBJ_FLAG_CLICKABLE);
+    Rule(bottom, cw, 1);
 
-    lv_obj_t* hero = lv_obj_create(center);
-    lv_obj_remove_style_all(hero);
-    lv_obj_set_width(hero, content_w);
-    lv_obj_set_height(hero, LV_SIZE_CONTENT);
-    lv_obj_set_style_bg_opa(hero, LV_OPA_TRANSP, 0);
-    lv_obj_set_flex_flow(hero, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(hero, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_row(hero, kHeroInnerGap, 0);
-    lv_obj_clear_flag(hero, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_clear_flag(hero, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_add_flag(hero, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
+    lv_obj_t* footer = Box(bottom);
+    lv_obj_set_size(footer, cw, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(footer, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(footer, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_margin_top(footer, 14, 0);
 
-    lv_obj_t* bubble = lv_image_create(hero);
-    lv_image_set_src(bubble, "A:ic_s_standby_bubble.spng");
-    lv_obj_set_size(bubble, kBubbleW, kBubbleH);
-    lv_obj_clear_flag(bubble, LV_OBJ_FLAG_CLICKABLE);
+    st.batt_lbl = Label(footer, small, "");
+    s_week_lbl = Label(footer, small, "");
 
-    lv_obj_t* cat = lv_image_create(hero);
-    lv_image_set_src(cat, "A:ic_s_standby_cat.spng");
-    lv_obj_set_size(cat, kCatW, kCatH);
-    lv_obj_clear_flag(cat, LV_OBJ_FLAG_CLICKABLE);
+    (void)H;
 }
 
 void StandbyClassic_StartOverlayRuntime() {
     StandbyClassic_RefreshDateOnce();
-    StandbyClassic_ApplyWeatherUi();
+    RefreshReading();
+    RefreshFooter(s_week_lbl);
     StandbyClassic_ApplyTodosFromCache();
-    StandbyClassic_ScheduleWeatherEnsure();
 }
 
 void StandbyClassic_Build(lv_obj_t* root, bool as_overlay) {
@@ -294,6 +333,7 @@ void StandbyClassic_Build(lv_obj_t* root, bool as_overlay) {
     StandbyClassic_as_overlay = as_overlay;
     StandbyClassic_alive = true;
     StandbyClassic_State() = StandbyClassicUiState{};
+    s_week_lbl = nullptr;
     StandbyClassic_BuildUi(root);
 }
 
@@ -312,4 +352,5 @@ void StandbyClassic_Teardown() {
     StandbyClassic_as_overlay = false;
     StandbyClassic_todos.clear();
     StandbyClassic_State() = StandbyClassicUiState{};
+    s_week_lbl = nullptr;
 }

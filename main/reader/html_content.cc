@@ -1,8 +1,10 @@
 #include "html_content.h"
 
+#include <algorithm>
 #include <cctype>
 #include <cstdlib>
 #include <cstring>
+#include <strings.h>
 
 namespace reader {
 namespace {
@@ -217,6 +219,38 @@ void HtmlBlockParser::Anchor(const char* begin, const char* end) {
     if (!id.empty()) anchors_(DecodeHtmlEntities(id), source_block_, source_offset_ + text_.size());
 }
 
+// True when the attribute is present, with or without a value (e.g. bare `hidden`).
+// Quoted attribute values are skipped so text like title="hidden" does not match.
+static bool HasAttr(const char* p, const char* end, const char* attr) {
+    const size_t n = std::strlen(attr);
+    char quote = 0;
+    for (; p < end; ++p) {
+        if (quote) { if (*p == quote) quote = 0; continue; }
+        if (*p == '"' || *p == '\'') { quote = *p; continue; }
+        if (!std::isspace(static_cast<unsigned char>(*p))) continue;
+        const char* a = p + 1;
+        if (static_cast<size_t>(end - a) < n || strncasecmp(a, attr, n) != 0) continue;
+        const char after = a + n < end ? a[n] : '\0';
+        if (after == '\0' || after == '=' || after == '/' || std::isspace(static_cast<unsigned char>(after))) return true;
+    }
+    return false;
+}
+
+// Elements that EPUB/HTML say must not be rendered. EPUB 3 nav documents in the
+// spine typically carry a hidden page-list (hundreds of print page numbers) and
+// landmarks; rendering them produced dozens of pages of bare numbers.
+static bool IsHiddenElement(const std::string& name, const char* begin, const char* end) {
+    if (HasAttr(begin, end, "hidden")) return true;
+    std::string style = ToLower(ReadAttrValue(begin, end, "style"));
+    style.erase(std::remove_if(style.begin(), style.end(), [](char c) { return std::isspace(static_cast<unsigned char>(c)); }), style.end());
+    if (style.find("display:none") != std::string::npos) return true;
+    if (name == "nav") {
+        const std::string type = ToLower(ReadAttrValue(begin, end, "epub:type"));
+        if (type.find("page-list") != std::string::npos || type.find("landmarks") != std::string::npos) return true;
+    }
+    return false;
+}
+
 bool HtmlBlockParser::Tag() {
     const char* begin = tag_.data();
     const char* end = begin + tag_.size();
@@ -228,6 +262,25 @@ bool HtmlBlockParser::Tag() {
     std::string name = ToLower(std::string(begin, p));
     const size_t colon = name.find(':');
     if (colon != std::string::npos) name.erase(0, colon + 1);
+    const bool self_closing = end > begin && *(end - 1) == '/';
+
+    if (hidden_nest_ > 0) {
+        // Inside a hidden subtree: only track nesting of its root tag name.
+        if (name == hidden_tag_) {
+            if (closing) { if (--hidden_nest_ == 0) hidden_tag_.clear(); }
+            else if (!self_closing) ++hidden_nest_;
+        }
+        return true;
+    }
+    if (!closing && !in_head_ && !in_script_ && !in_style_ && !name.empty() &&
+        IsHiddenElement(name, p, end)) {
+        if (self_closing || name == "img" || name == "image" || name == "br") return true;
+        if (!Emit(false)) return false;
+        hidden_tag_ = name;
+        hidden_nest_ = 1;
+        return true;
+    }
+
     if (name == "head") in_head_ = !closing;
     else if (name == "script") in_script_ = !closing;
     else if (name == "style") in_style_ = !closing;
@@ -295,7 +348,7 @@ bool HtmlBlockParser::Feed(const uint8_t* data, size_t size) {
             entity_.clear();
         }
         if (c == '<') { in_tag_ = true; continue; }
-        if (in_head_ || in_script_ || in_style_) continue;
+        if (in_head_ || in_script_ || in_style_ || hidden_nest_ > 0) continue;
         if (c == '&') entity_ = "&";
         else if (!Text(c)) return false;
     }

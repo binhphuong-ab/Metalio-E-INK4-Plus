@@ -138,6 +138,9 @@ bool StandbyClassic_HttpGetWeather(std::string& body_out, std::string& err_out) 
 }
 
 void StandbyClassic_EnsureWeatherCachedLocked() {
+#if METALIO_OFFLINE
+    return;  // weather disabled: no NVS read, no HTTP request
+#endif
     char today[9];
     if (!StandbyClassic_FormatToday(today, sizeof(today))) {
         ESP_LOGW(TAG, "weather skip: time not ready");
@@ -197,6 +200,9 @@ static void EnsureWeatherTask(void* /*arg*/) {
 }
 
 void StandbyClassic_ScheduleWeatherEnsure() {
+#if METALIO_OFFLINE
+    return;  // do not spawn the weather worker task
+#endif
     if (StandbyClassic_WeatherRamIsToday()) {
         return;
     }

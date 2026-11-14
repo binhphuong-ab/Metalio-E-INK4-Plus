@@ -200,6 +200,10 @@ bool StandbyClassic_WeatherRamIsToday() {
 }
 
 WeatherSnap StandbyClassic_WeatherRamCopy() {
+#if METALIO_OFFLINE
+    // Weather hidden: never surface a snapshot (including one cached in NVS by stock firmware).
+    return WeatherSnap{};
+#endif
     std::lock_guard<std::mutex> lock(StandbyClassic_weather_mu);
     return StandbyClassic_weather;
 }
@@ -215,6 +219,9 @@ bool StandbyClassic_LoadWeatherFromNvs(WeatherSnap& out, char* day_out, size_t d
     if (day_out != nullptr && day_len > 0) {
         day_out[0] = '\0';
     }
+#if METALIO_OFFLINE
+    return false;
+#endif
     Settings settings(kWeatherNs, false);
     const std::string day = settings.GetString("day");
     if (day.size() != 8) {

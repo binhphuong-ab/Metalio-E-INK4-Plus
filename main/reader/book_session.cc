@@ -78,7 +78,7 @@ std::atomic<uint32_t> s_txt_work_id{0}; // 区分异步回收期间重叠的 TXT
 constexpr size_t kMaxTxtBytes = static_cast<size_t>(INT32_MAX) - 1; // 源偏移和 fseek 的表示边界
 constexpr size_t kTxtReadChunk = 1024;
 constexpr uint32_t kMaxLineSourceBytes = 512;
-constexpr uint32_t kTxtIdxVersion = 24; // 中英文标题与副标题样式写入行索引
+constexpr uint32_t kTxtIdxVersion = 25; // 25: no line breaks inside Latin/Vietnamese words
 constexpr uint16_t kTxtLineParaStart = 0x8000u;
 constexpr uint16_t kTxtLineJustify = 0x4000u;
 constexpr uint16_t kTxtLineHeading = 0x2000u;
@@ -2639,7 +2639,7 @@ bool BookSession::CountChapterPages(int chapter, int& out_pages) const {
 
 namespace {
 
-constexpr uint32_t kChapterPageCacheVersion = 14;
+constexpr uint32_t kChapterPageCacheVersion = 17; // 17: justify Latin text at spaces only
 
 #pragma pack(push, 1)
 struct ChapterPageHdr {

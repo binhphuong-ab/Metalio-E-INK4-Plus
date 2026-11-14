@@ -61,14 +61,18 @@ void Home_OnAppNameDraw(lv_event_t* e)
     const char* Home_AppNameWorkBuddy() { return "workbuddy"; }
     #endif
 
+    // METALIO_OFFLINE hides apps that only work with the vendor cloud
+    // (Tasks sync, Ask AI, WorkBuddy).
     extern const AppEntry kApps[] = {
+        #if !METALIO_OFFLINE
         {"A:ic_app_home_task.spng", Home_AppNameTask, TaskScreen::Create},
         {"A:ic_app_home_teacher.spng", Home_AppNameAssistant, AssistantScreen::Create},
+        #endif
         {"A:ic_app_home_book.spng", Home_AppNameBook, BookScreen::Create},
         {"A:ic_app_home_wallpaper.spng", Home_AppNameWallpaper, WallpaperScreen::Create},
         {"A:ic_app_home_cloud.spng", Home_AppNameCloud, CloudScreen::Create},
         {"A:ic_app_home_setting.spng", Home_AppNameSettings, SettingsScreen::Create},
-        #if !CONFIG_BOARD_TYPE_METALIO_E_INK4_PLUS_GLOBAL
+        #if !CONFIG_BOARD_TYPE_METALIO_E_INK4_PLUS_GLOBAL && !METALIO_OFFLINE
         {"A:ic_app_home_workbuddy.spng", Home_AppNameWorkBuddy, WorkBuddyScreen::Create},
         #endif
     };
@@ -77,11 +81,13 @@ void Home_OnAppNameDraw(lv_event_t* e)
     extern const AppEntry kSlashApps[] = {
         {"A:ic_app_home_book.spng", Home_AppNameBook, BookScreen::Create},
         {"A:ic_app_home_wallpaper.spng", Home_AppNameWallpaper, WallpaperScreen::Create},
+        #if !METALIO_OFFLINE
         {"A:ic_app_home_teacher.spng", Home_AppNameAssistant, AssistantScreen::Create},
         {"A:ic_app_home_task.spng", Home_AppNameTask, TaskScreen::Create},
+        #endif
         {"A:ic_app_home_cloud.spng", Home_AppNameCloud, CloudScreen::Create},
         {"A:ic_app_home_setting.spng", Home_AppNameSettings, SettingsScreen::Create},
-        #if !CONFIG_BOARD_TYPE_METALIO_E_INK4_PLUS_GLOBAL
+        #if !CONFIG_BOARD_TYPE_METALIO_E_INK4_PLUS_GLOBAL && !METALIO_OFFLINE
         {"A:ic_app_home_workbuddy.spng", Home_AppNameWorkBuddy, WorkBuddyScreen::Create},
         #endif
     };

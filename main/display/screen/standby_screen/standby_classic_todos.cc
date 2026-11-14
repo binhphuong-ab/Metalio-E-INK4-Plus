@@ -129,6 +129,14 @@ void StandbyClassic_SetTodoHint(const char* text) {
 
 void StandbyClassic_ApplyTodosFromCache() {
     StandbyClassic_todos.clear();
+#if METALIO_OFFLINE
+    // Tasks are cloud-only; hide the to-do block instead of showing an empty hint.
+    if (StandbyClassic_State().todo_host != nullptr) {
+        lv_obj_clean(StandbyClassic_State().todo_host);
+        lv_obj_add_flag(StandbyClassic_State().todo_host, LV_OBJ_FLAG_HIDDEN);
+    }
+    return;
+#endif
     if (!checklist_cache_ready()) {
         StandbyClassic_SetTodoHint(Lang::Strings::STANDBY_NO_TODO_CACHE);
         return;
