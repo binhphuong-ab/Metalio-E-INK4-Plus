@@ -1,7 +1,7 @@
-# Metalio E-INK4 Plus — Offline English firmware `2.0.79-en.1`
+# Metalio E-INK4 Plus — Offline English firmware `2.0.79-en.2`
 
 > This folder holds the installer scripts only. Download the ready-to-flash zip from
-> [Releases](https://github.com/binhphuong-ab/Metalio-E-INK4-Plus/releases/tag/v2.0.79-en.1).
+> [Releases](https://github.com/binhphuong-ab/Metalio-E-INK4-Plus/releases/tag/v2.0.79-en.2).
 > Thư mục này chỉ chứa script; tải gói zip có sẵn file nạp ở trang Releases.
 
 **English** · [Tiếng Việt](#tiếng-việt)
@@ -20,10 +20,12 @@ made for reading in **English and Vietnamese**. Not an official Metalio/CloudZao
   - full Vietnamese letters in the UI font (titles, library, footer, TOC);
   - hidden EPUB sections (print page lists) are no longer shown as pages of numbers.
 - **Redesigned** standby screen, home date line and Books home.
+- **Offline dictionary** (new in en.2) — hold **Home** while reading, tap any word, and its
+  definition opens full screen. See [Dictionary](#dictionary).
 
 ## Requirements
 
-- Metalio E-INK4 Plus (ESP32-S31, 4.7") **running the stock Metalio firmware**.
+- Metalio E-INK4 Plus (ESP32-S31, 4.7") **running the stock Metalio firmware** (or an earlier `en` build — upgrading is the same `./flash.sh`).
   If you installed kiikoread / mogo / dpReader, restore the stock firmware first.
 - macOS or Linux, Python 3, and esptool 5.x: `pip install --upgrade esptool`
 - A USB-C **data** cable.
@@ -46,7 +48,7 @@ made for reading in **English and Vietnamese**. Not an official Metalio/CloudZao
 **Windows:** install esptool, find the COM port in Device Manager, back up first, then:
 ```
 esptool --port COM5 read-flash 0 ALL backup.bin
-esptool --port COM5 write-flash 0x80000 metalio-e-ink4-plus-2.0.79-en.1-app.bin 0xae4000 metalio-e-ink4-plus-2.0.79-en.1-fontpack.bin
+esptool --port COM5 write-flash 0x80000 metalio-e-ink4-plus-2.0.79-en.2-app.bin 0xae4000 metalio-e-ink4-plus-2.0.79-en.2-fontpack.bin
 ```
 
 ## Reading fonts (optional)
@@ -54,6 +56,22 @@ esptool --port COM5 write-flash 0x80000 metalio-e-ink4-plus-2.0.79-en.1-app.bin 
 Copy `sdcard/metalio` from the source branch to the root of the SD card (enable
 **Transfer → USB** on the reader). It adds Literata and Noto Serif with Vietnamese
 support (SIL OFL 1.1). Then: open a book → **Reading settings → Choose font**.
+
+## Dictionary
+
+1. Turn on **Transfer → USB** on the reader so the SD card shows up on the computer.
+2. Copy the `metalio` folder from the zip's `sdcard/` to the root of the SD card
+   (definition fonts).
+3. Copy a StarDict dictionary to `metalio/e-ink/dictionaries/<Name>/<Name>.ifo|.idx|.dict.dz|.syn`.
+   The release has an English–Vietnamese one ready: unzip
+   `AnhVietAnh-StarDict.zip` to the root of the SD card.
+4. Eject the disk, turn USB transfer off.
+
+Use: open a book, **hold Home** (the middle word is highlighted), **tap a word** →
+its definition fills the screen. Page keys or tapping the left third / the rest of the
+screen turn definition pages; tap the headword line to go back to the page; a
+**short Home press** closes the dictionary. The first lookup builds a small index
+(about a second); after that lookups are instant.
 
 ## Notes
 
@@ -81,10 +99,11 @@ dành cho người đọc sách **tiếng Anh và tiếng Việt**. Không phả
   - font giao diện đủ chữ Việt (tên sách, thư viện, chân trang, mục lục);
   - không còn hiện các trang toàn số trang của bản in trong mục lục EPUB.
 - **Thiết kế lại** màn hình chờ, dòng ngày trên trang chủ và trang Books.
+- **Từ điển offline** (mới ở en.2): khi đọc, **đè giữ Home**, chạm vào từ, nghĩa hiện toàn màn hình.
 
 ### Yêu cầu
 
-- Metalio E-INK4 Plus (ESP32-S31, 4,7") **đang chạy firmware gốc của Metalio**.
+- Metalio E-INK4 Plus (ESP32-S31, 4,7") **đang chạy firmware gốc của Metalio** (hoặc bản `en` cũ — nâng cấp cũng chạy `./flash.sh`).
   Nếu đã cài kiikoread / mogo / dpReader, hãy cài lại firmware gốc trước.
 - macOS hoặc Linux, Python 3 và esptool 5.x: `pip install --upgrade esptool`
 - Cáp USB-C **có truyền dữ liệu**.
@@ -111,6 +130,19 @@ dành cho người đọc sách **tiếng Anh và tiếng Việt**. Không phả
 Chép thư mục `sdcard/metalio` trong nhánh mã nguồn vào gốc thẻ SD (bật **Transfer → USB**
 trên máy). Gồm Literata và Noto Serif hỗ trợ tiếng Việt (SIL OFL 1.1).
 Sau đó: mở sách → **Reading settings → Choose font**.
+
+### Từ điển
+
+1. Bật **Transfer → USB** trên máy để thẻ SD hiện lên máy tính.
+2. Chép thư mục `metalio` trong `sdcard/` của gói zip vào gốc thẻ SD (font hiển thị nghĩa).
+3. Chép từ điển StarDict vào `metalio/e-ink/dictionaries/<Tên>/<Tên>.ifo|.idx|.dict.dz|.syn`.
+   Release có sẵn từ điển Anh–Việt–Anh: giải nén `AnhVietAnh-StarDict.zip` vào gốc thẻ SD.
+4. Tháo ổ an toàn, tắt USB trên máy.
+
+Dùng: mở sách, **đè giữ Home** (từ giữa trang bị bôi đen), **chạm vào từ** → nghĩa hiện toàn
+màn hình. Phím bấm, hoặc chạm 1/3 bên trái / phần còn lại để lật trang nghĩa; chạm dòng tên từ
+để quay lại trang sách; **nhấn nhanh Home** để thoát. Lần tra đầu tiên mất khoảng 1 giây để
+tạo chỉ mục, sau đó tra tức thì.
 
 ### Lưu ý
 

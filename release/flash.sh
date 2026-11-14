@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Metalio E-INK4 Plus — offline English firmware 2.0.79-en.1 installer (macOS / Linux)
+# Metalio E-INK4 Plus — offline English firmware 2.0.79-en.2 installer (macOS / Linux)
 #
 #   ./flash.sh              check device, back up the whole flash, then install
 #   ./flash.sh --dry-run    run every check and the backup, but write nothing
@@ -13,7 +13,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-VERSION="2.0.79-en.1"
+VERSION="2.0.79-en.2"
 APP="metalio-e-ink4-plus-${VERSION}-app.bin"
 FONT="metalio-e-ink4-plus-${VERSION}-fontpack.bin"
 DRY_RUN=0

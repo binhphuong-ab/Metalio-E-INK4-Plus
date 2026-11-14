@@ -2,14 +2,16 @@
 >
 > **English:** community build of this firmware for reading in **English and Vietnamese**:
 > English-only UI, no AI/cloud features, words never split across lines, justification at
-> spaces only, full Vietnamese letters in the UI font, redesigned standby / home / Books screens.
+> spaces only, full Vietnamese letters in the UI font, redesigned standby / home / Books screens,
+> and an **offline touch dictionary** (hold Home while reading, tap a word).
 >
 > **Tiếng Việt:** bản cộng đồng dành cho đọc sách **tiếng Anh và tiếng Việt**: giao diện chỉ
 > tiếng Anh, bỏ AI và đám mây, không cắt đôi từ, căn đều chỉ giãn ở dấu cách, font giao diện
-> đủ chữ Việt, thiết kế lại màn hình chờ / trang chủ / trang Books.
+> đủ chữ Việt, thiết kế lại màn hình chờ / trang chủ / trang Books, và **từ điển offline cảm ứng**
+> (đè giữ Home khi đọc, chạm vào từ).
 >
 > **⬇️ Download & install / Tải về và cài đặt:**
-> [Releases → v2.0.79-en.1](https://github.com/binhphuong-ab/Metalio-E-INK4-Plus/releases/tag/v2.0.79-en.1)
+> [Releases → v2.0.79-en.2](https://github.com/binhphuong-ab/Metalio-E-INK4-Plus/releases/tag/v2.0.79-en.2)
 > · Guide / Hướng dẫn: [`release/INSTALL.md`](release/INSTALL.md)
 > · Reading fonts / Font đọc sách: [`sdcard/`](sdcard/README.md)
 >
