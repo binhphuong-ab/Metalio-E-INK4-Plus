@@ -1,3 +1,23 @@
+> ## 🇬🇧 Offline English build · 🇻🇳 Bản tiếng Anh offline — `english-default`
+>
+> **English:** community build of this firmware for reading in **English and Vietnamese**:
+> English-only UI, no AI/cloud features, words never split across lines, justification at
+> spaces only, full Vietnamese letters in the UI font, redesigned standby / home / Books screens.
+>
+> **Tiếng Việt:** bản cộng đồng dành cho đọc sách **tiếng Anh và tiếng Việt**: giao diện chỉ
+> tiếng Anh, bỏ AI và đám mây, không cắt đôi từ, căn đều chỉ giãn ở dấu cách, font giao diện
+> đủ chữ Việt, thiết kế lại màn hình chờ / trang chủ / trang Books.
+>
+> **⬇️ Download & install / Tải về và cài đặt:**
+> [Releases → v2.0.79-en.1](https://github.com/binhphuong-ab/Metalio-E-INK4-Plus/releases/tag/v2.0.79-en.1)
+> · Guide / Hướng dẫn: [`release/INSTALL.md`](release/INSTALL.md)
+> · Reading fonts / Font đọc sách: [`sdcard/`](sdcard/README.md)
+>
+> Not an official Metalio/CloudZao release. The original README follows.
+> Không phải bản chính thức của Metalio/CloudZao. README gốc ở bên dưới.
+
+---
+
 # Metalio E-Ink4-Plus
 
 <p align="center">
