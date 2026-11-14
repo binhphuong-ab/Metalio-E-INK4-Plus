@@ -4,6 +4,9 @@
 
 #include <lvgl.h>
 
+#include <string>
+#include <vector>
+
 namespace reader {
 
 /**
@@ -37,6 +40,21 @@ bool RasterPageVerticalTextToL8(const Page& page, const lv_font_t* font, int spa
  */
 int EstimatePageTextHeight(const Page& page, const lv_font_t* font, int spacing_percent,
                            lv_coord_t para_gap, int max_h, int line_gap = -1);
+
+/** @brief A word on a rasterised page, in raster pixel coordinates. */
+struct PageWordBox {
+    std::string text;   // UTF-8 word as printed
+    int x0 = 0, x1 = 0; // horizontal ink span [x0, x1)
+    int line_top = 0;   // top of the glyph line box (same origin as lv_draw_label)
+    int cell_top = 0, cell_bottom = 0; // full row cell, for generous touch hit-testing
+};
+
+/**
+ * @brief Replays RasterPageTextToL8's horizontal layout and returns every word's box.
+ * @note Vertical writing is not supported (returns false).
+ */
+bool CollectPageWords(const Page& page, const lv_font_t* font, int spacing_percent, lv_coord_t para_gap,
+                      int page_w, int page_h, const TextStyle& style, std::vector<PageWordBox>& out);
 
 /** @brief 页内是否仅有文本（可走页光栅） */
 bool PageIsTextOnly(const Page& page);

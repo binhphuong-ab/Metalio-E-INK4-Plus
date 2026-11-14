@@ -1168,6 +1168,15 @@
     X(STANDBY_CHARGING_FMT, "充电中 %d%%", "Charging %d%%") \
     X(BOOK_UP_NEXT, "接下来读", "UP NEXT") \
     X(BOOK_TIME_READ_FMT, "已读 %s", "%s read") \
+    X(DICT_LOOKING_UP, "Looking up…", "Looking up…") \
+    X(DICT_PREPARING, "Preparing the dictionary (first time only)…", "Preparing the dictionary (first time only)…") \
+    X(DICT_NOT_FOUND, "Not in the dictionary", "Not in the dictionary") \
+    X(DICT_NO_DICTIONARY, "No dictionary found. Copy a StarDict folder to metalio/e-ink/dictionaries on the SD card.", "No dictionary found. Copy a StarDict folder to metalio/e-ink/dictionaries on the SD card.") \
+    X(DICT_SD_BUSY, "The SD card is busy. Turn off USB transfer and try again.", "The SD card is busy. Turn off USB transfer and try again.") \
+    X(DICT_ERROR, "Could not read the dictionary", "Could not read the dictionary") \
+    X(DICT_NO_WORDS, "No words to look up on this page", "No words to look up on this page") \
+    X(DICT_HINT, "Tap a word · Home to close", "Tap a word · Home to close") \
+    X(DICT_PAGE_FMT, "%d / %d", "%d / %d") \
     X(WALLPAPER_ADJUST, "调整", "Adjust") \
     X(WALLPAPER_CHIP_SHUTDOWN, "关机", "Power-off") \
     X(WALLPAPER_CHIP_STANDBY, "待机", "Standby") \

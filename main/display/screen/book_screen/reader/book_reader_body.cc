@@ -5,6 +5,7 @@
 #pragma GCC optimize("O1")
 
 #include "book_screen/reader/book_reader_body.h"
+#include "book_screen/reader/book_dict.h"
 #include "book_screen/reader/book_auto_turn.h"
 #include "book_screen/reader/book_reader_orient.h"
 #include "book_screen/book_screen_priv.h"
@@ -153,6 +154,7 @@ void ShowReaderPageLoading() {
 
 void RenderReaderPage() {
     if (Book_State().reader.standby_paused) return;
+    BookDict_Close();  // the word boxes belong to the page being replaced
     // Start a fresh interval after every render, including manual turns and layout changes.
     struct AutoTurnResetOnExit { ~AutoTurnResetOnExit() {
         if (ReaderAutoTurnEnabled()) ResetReaderAutoTurnDeadline();

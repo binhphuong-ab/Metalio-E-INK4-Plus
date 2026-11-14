@@ -421,4 +421,119 @@ bool RasterPageVerticalTextToL8(const Page& page, const lv_font_t* font, int spa
     return any;
 }
 
+namespace {
+
+// Same pen/spacing arithmetic as DrawUtf8Line, without drawing. Emits one box per word.
+void MeasureWordsOnLine(const lv_font_t* font, int x, const std::string& text, const TextLineSpacing& spacing,
+                        int letter_gap, int line_top, int cell_top, int cell_bottom, std::vector<PageWordBox>& out) {
+    const auto* p = reinterpret_cast<const uint8_t*>(text.data());
+    size_t left = text.size();
+    int pen_x = x;
+    TextSpacingState state;
+    PageWordBox word;
+    bool in_word = false;
+    uint32_t prev = 0;
+    auto flush = [&]() {
+        if (in_word && !word.text.empty()) out.push_back(word);
+        in_word = false;
+        word = PageWordBox{};
+    };
+    while (left > 0) {
+        uint32_t cp = 0;
+        const size_t n = Utf8Next(p, left, &cp);
+        if (n == 0) break;
+        const char* bytes = reinterpret_cast<const char*>(p);
+        p += n;
+        left -= n;
+        if (cp == '\n' || cp == '\r') { flush(); continue; }
+        lv_font_glyph_dsc_t gdsc{};
+        const bool known = lv_font_get_glyph_dsc(font, &gdsc, cp, 0);
+        ObserveTextGlyph(state, font, cp, gdsc, known, letter_gap);
+        const int shift = known ? spacing.Offset(state.slots, state.capacity) : 0;
+        const int adv = known ? TextAdvanceWithGap(TextGlyphAdvance(gdsc), letter_gap)
+                              : TextAdvanceWithGap(std::max(1, static_cast<int>(lv_font_get_glyph_width(font, cp, 0))), letter_gap);
+        const int gx0 = pen_x + shift, gx1 = pen_x + shift + adv;
+        // Apostrophes inside a word ("don't", "don’t") belong to it.
+        const bool apostrophe = (cp == '\'' || cp == 0x2019) && in_word;
+        if (IsWordChar(cp) || apostrophe) {
+            if (!in_word) {
+                in_word = true;
+                word.x0 = gx0;
+                word.line_top = line_top;
+                word.cell_top = cell_top;
+                word.cell_bottom = cell_bottom;
+            }
+            word.text.append(bytes, n);
+            word.x1 = gx1;
+        } else {
+            flush();
+        }
+        prev = cp;
+        pen_x += adv;
+    }
+    (void)prev;
+    flush();
+    // Drop trailing apostrophes ("dogs'" -> "dogs").
+    for (auto it = out.end(); it != out.begin();) {
+        --it;
+        if (it->cell_top != cell_top) break;
+        while (!it->text.empty() && (it->text.back() == '\'' ||
+               (it->text.size() >= 3 && it->text.compare(it->text.size() - 3, 3, "\xE2\x80\x99") == 0)))
+            it->text.erase(it->text.back() == '\'' ? it->text.size() - 1 : it->text.size() - 3);
+    }
+}
+
+}  // namespace
+
+bool CollectPageWords(const Page& page, const lv_font_t* font, int spacing_percent, lv_coord_t para_gap,
+                      int page_w, int page_h, const TextStyle& style, std::vector<PageWordBox>& out) {
+    out.clear();
+    if (font == nullptr || page_w <= 0 || page_h <= 0) return false;
+    const auto layout = MakeTextLineLayout(font, page_h, spacing_percent, false, style.line_gap);
+    const lv_coord_t indent_px = ParaIndentPadPx(font, style.indent_chars);
+    int y = 0, row = 0;
+    bool any = false, previous_title = false;
+    for (const auto& item : page.items) {
+        if (item.kind != ContentKind::kText) {
+            y += item.image_h;
+            previous_title = false;
+            any = true;
+            continue;
+        }
+        if (item.text.empty()) continue;
+        if (item.para_gap_before && any) y += ReaderParagraphGap(para_gap, previous_title);
+        if (row >= layout.count) break;
+        if (item.chapter_title && item.text.find('\n') != std::string::npos) {
+            size_t begin = 0;
+            while (begin <= item.text.size() && row < layout.count) {
+                const size_t nl = item.text.find('\n', begin);
+                const std::string line = item.text.substr(begin, nl == std::string::npos ? std::string::npos : nl - begin);
+                const auto spacing = MakeTextLineSpacing(font, line, page_w, false, false, style.letter_gap);
+                const int text_x = spacing.width < page_w ? (page_w - spacing.width) / 2 : 0;
+                const int cell = layout.CellHeight(row);
+                MeasureWordsOnLine(font, text_x, line, spacing, style.letter_gap, y + layout.TextOffset(row), y, y + cell, out);
+                y += cell;
+                ++row;
+                if (nl == std::string::npos) break;
+                begin = nl + 1;
+            }
+            any = true;
+            previous_title = true;
+            continue;
+        }
+        const int available = page_w - (item.para_indent && !item.chapter_title ? indent_px : 0);
+        const auto spacing = MakeTextLineSpacing(font, item.text, available, item.justify && !item.chapter_title, false, style.letter_gap);
+        int text_x = 0;
+        if (item.chapter_title) text_x = spacing.width < page_w ? (page_w - spacing.width) / 2 : 0;
+        else if (item.para_indent) text_x = indent_px;
+        const int cell = layout.CellHeight(row);
+        MeasureWordsOnLine(font, text_x, item.text, spacing, style.letter_gap, y + layout.TextOffset(row), y, y + cell, out);
+        y += cell;
+        ++row;
+        any = true;
+        previous_title = item.chapter_title;
+    }
+    return !out.empty();
+}
+
 }  // namespace reader

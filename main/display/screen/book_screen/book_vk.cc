@@ -20,6 +20,7 @@
 #include "book_screen/reader/book_layout_worker.h"
 #include "book_screen/reader/book_layout_debounce.h"
 #include "book_screen/reader/book_page_image.h"
+#include "book_screen/reader/book_dict.h"
 #include "standby_screen/standby_screen.h"
 #include "sd_access.h"
 #include "display/font/ttf_convert.h"
@@ -135,6 +136,10 @@ bool BookScreen::OnBootClick() {
     if (std::strcmp(VkKey_ActiveScreen(), kScreenRead) != 0) {
         return false;
     }
+    if (BookDict_Active()) {
+        BookLvAsync([](void*) { BookDict_Close(); });
+        return true;
+    }
     BookLvAsync(ToggleReadSettingsSheetAsync);
     return true;
 }
@@ -147,6 +152,19 @@ bool BookScreen::OnBootLongPress() {
 bool BookScreen::OnVkKeyLongPress(const char* key_name) {
     if (key_name == nullptr) {
         return false;
+    }
+    // Reader: hold Home toggles dictionary mode (CrossMux style) instead of leaving the book.
+    if (BookDict_Active()) {
+        if (std::strcmp(key_name, "vk_home") == 0) BookLvAsync([](void*) { BookDict_Close(); });
+        return true;
+    }
+    if (std::strcmp(key_name, "vk_home") == 0 && std::strcmp(VkKey_ActiveScreen(), kScreenRead) == 0) {
+        auto& st = Book_State();
+        if (st.reader.session && st.reader.session->IsOpen() && !st.reader.opening.load() &&
+            st.reader.read_chrome == BookUiState::ReadChrome::kReading && !BookmarkMessageVisible()) {
+            BookLvAsync(BookDict_EnterAsync);
+            return true;
+        }
     }
     // 与 397 一致：先退出阅读并恢复竖屏，再回系统首页。
     if (std::strcmp(key_name, "vk_home") == 0) {
@@ -179,6 +197,7 @@ bool BookScreen::OnVkKey(const char* key_name) {
     }
 
     if (std::strcmp(screen, kScreenRead) == 0) {
+        if (BookDict_OnKey(key_name)) return true;
         if (std::strcmp(key_name, "vk_prev") == 0 || std::strcmp(key_name, "vk_next") == 0)
             ReaderAutoTurnManualInput();
         // 正文 vk_home 短按：设置/目录浮层→收起；长按经阅读退出清理回系统首页
