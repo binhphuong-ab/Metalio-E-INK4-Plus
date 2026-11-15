@@ -1,7 +1,7 @@
-# Metalio E-INK4 Plus — Offline English firmware `2.0.79-en.2`
+# Metalio E-INK4 Plus — Offline English firmware `2.0.79-en.3`
 
 > This folder holds the installer scripts only. Download the ready-to-flash zip from
-> [Releases](https://github.com/binhphuong-ab/Metalio-E-INK4-Plus/releases/tag/v2.0.79-en.2).
+> [Releases](https://github.com/binhphuong-ab/Metalio-E-INK4-Plus/releases/tag/v2.0.79-en.3).
 > Thư mục này chỉ chứa script; tải gói zip có sẵn file nạp ở trang Releases.
 
 **English** · [Tiếng Việt](#tiếng-việt)
@@ -22,6 +22,9 @@ made for reading in **English and Vietnamese**. Not an official Metalio/CloudZao
 - **Redesigned** standby screen, home date line and Books home.
 - **Offline dictionary** (new in en.2) — hold **Home** while reading, tap any word, and its
   definition opens full screen. See [Dictionary](#dictionary).
+- **Back to your page** (new in en.3) — switch the reader off while reading and it reopens
+  the same book at the same page when switched on. The standby screen can show the page
+  you are reading, too. See [Standby on the reading page](#standby-on-the-reading-page).
 
 ## Requirements
 
@@ -48,7 +51,7 @@ made for reading in **English and Vietnamese**. Not an official Metalio/CloudZao
 **Windows:** install esptool, find the COM port in Device Manager, back up first, then:
 ```
 esptool --port COM5 read-flash 0 ALL backup.bin
-esptool --port COM5 write-flash 0x80000 metalio-e-ink4-plus-2.0.79-en.2-app.bin 0xae4000 metalio-e-ink4-plus-2.0.79-en.2-fontpack.bin
+esptool --port COM5 write-flash 0x80000 metalio-e-ink4-plus-2.0.79-en.3-app.bin 0xae4000 metalio-e-ink4-plus-2.0.79-en.3-fontpack.bin
 ```
 
 ## Reading fonts (optional)
@@ -72,6 +75,23 @@ its definition fills the screen. Page keys or tapping the left third / the rest 
 screen turn definition pages; tap the headword line to go back to the page; a
 **short Home press** closes the dictionary. The first lookup builds a small index
 (about a second); after that lookups are instant.
+
+## Standby on the reading page
+
+The zip's `sdcard/metalio/e-ink/wallpaper/` has three transparent overlays (copy them to
+the SD card like the fonts above):
+
+- `standby-reading-page-moon-center.png` — the page with a large faint moon in the middle;
+- `standby-reading-page-moon.png` — the page with a small moon in the top-right corner;
+- `standby-reading-page.png` — the page exactly as it is.
+
+Open **Wallpaper**, pick one, tap **Set as standby** → **Transparent wallpaper**. Standby
+then keeps the page you were reading under the overlay. **Clear selection** brings the
+classic standby screen back.
+
+Power-on resume needs no setup: if a book is open when the reader is switched off (also
+from standby), the next power-on goes straight back to that page (Home shows for about a
+second first). Switched off anywhere else, it starts on Home as usual.
 
 ## Notes
 
@@ -100,6 +120,8 @@ dành cho người đọc sách **tiếng Anh và tiếng Việt**. Không phả
   - không còn hiện các trang toàn số trang của bản in trong mục lục EPUB.
 - **Thiết kế lại** màn hình chờ, dòng ngày trên trang chủ và trang Books.
 - **Từ điển offline** (mới ở en.2): khi đọc, **đè giữ Home**, chạm vào từ, nghĩa hiện toàn màn hình.
+- **Trở lại trang đang đọc** (mới ở en.3): tắt máy khi đang đọc, bật lên máy mở lại đúng sách,
+  đúng trang. Màn hình chờ cũng có thể giữ nguyên trang đang đọc.
 
 ### Yêu cầu
 
@@ -143,6 +165,18 @@ Dùng: mở sách, **đè giữ Home** (từ giữa trang bị bôi đen), **ch�
 màn hình. Phím bấm, hoặc chạm 1/3 bên trái / phần còn lại để lật trang nghĩa; chạm dòng tên từ
 để quay lại trang sách; **nhấn nhanh Home** để thoát. Lần tra đầu tiên mất khoảng 1 giây để
 tạo chỉ mục, sau đó tra tức thì.
+
+### Màn hình chờ là trang đang đọc
+
+Trong `sdcard/metalio/e-ink/wallpaper/` của gói zip có 3 ảnh trong suốt (chép vào thẻ SD như font):
+`standby-reading-page-moon-center.png` (trăng to mờ ở giữa), `standby-reading-page-moon.png`
+(trăng nhỏ góc trên phải), `standby-reading-page.png` (chỉ trang sách).
+
+Mở **Wallpaper**, chọn ảnh, chạm **Set as standby** → **Transparent wallpaper**. Màn hình chờ sẽ
+giữ trang đang đọc bên dưới. Chọn **Clear selection** để quay về màn hình chờ cũ.
+
+Mở lại sách khi bật máy không cần cài gì: tắt máy lúc đang mở sách (kể cả từ màn hình chờ), lần
+bật sau máy về thẳng trang đó (Home hiện thoáng khoảng 1 giây). Tắt ở chỗ khác thì vẫn vào Home.
 
 ### Lưu ý
 
