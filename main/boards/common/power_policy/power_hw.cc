@@ -24,6 +24,7 @@
 #include "sd_access.h"
 #include "display/font/ttf_convert.h"
 #include "standby_screen/standby_screen.h"
+#include "book_screen/book_resume.h"
 
 #include <driver/gpio.h>
 #include <esp_log.h>
@@ -385,6 +386,7 @@ PowerHwCpuFreqHold::~PowerHwCpuFreqHold() {
 }
 
 static void PwrOffTask(void* /*arg*/) {
+    BookResume_RecordAtPowerOff();
     ttf_convert::Cancel();
     while (ttf_convert::Busy()) vTaskDelay(pdMS_TO_TICKS(20));
     power_hw_pa_set(false);

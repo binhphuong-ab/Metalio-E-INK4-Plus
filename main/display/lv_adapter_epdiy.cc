@@ -54,6 +54,7 @@ bool BlitL8ToEpdFullScreen(const reader::RasterImage& img);
 #include "image_geometry.h"
 #include "reader/book_home_snapshot.h"
 #include "wallpaper_screen/wallpaper_active.h"
+#include "book_screen/book_resume.h"
 
 #include <cstdio>
 #include <esp_heap_caps.h>
@@ -720,6 +721,11 @@ void LvAdapterEpdiy::Tick() {
 
 void LvAdapterEpdiy::SetSystemReady() {
     SetStatus("");
+    // SD is mounted by now: reopen the book that was open at power-off.
+    if (Lock(2000)) {
+        BookResume_OnSystemReady();
+        Unlock();
+    }
 }
 
 void LvAdapterEpdiy::RequestFullOnNextCommit() {
