@@ -169,7 +169,8 @@ bool FlushLineToPage(std::string& line, BookPageStore& pages, Page& cur, lv_coor
                      const TextLineLayout& layout, int& row, lv_coord_t gap_before,
                      bool para_indent = false, bool chapter_title = false,
                      bool para_gap_before = false, uint32_t source_block = UINT32_MAX,
-                     uint32_t source_begin = 0, uint32_t source_end = 0, bool justify = false) {
+                     uint32_t source_begin = 0, uint32_t source_end = 0, bool justify = false,
+                     bool boxed = false, lv_coord_t top_gap = 0) {
     if (line.empty()) {
         return true;
     }
@@ -178,7 +179,7 @@ bool FlushLineToPage(std::string& line, BookPageStore& pages, Page& cur, lv_coor
         if (!pages.Push(std::move(cur))) return false;
         cur = Page{}; y = 0; row = 0;
     }
-    if (cur.items.empty()) gap_before = 0;
+    if (cur.items.empty()) gap_before = top_gap;
     try {
         PageItem item;
         item.source_block=source_block;
@@ -188,6 +189,7 @@ bool FlushLineToPage(std::string& line, BookPageStore& pages, Page& cur, lv_coor
         item.para_gap_before = para_gap_before;
         item.chapter_title = chapter_title;
         item.justify = justify && !chapter_title;
+        item.boxed = boxed;
         item.text = std::move(line);
         line.clear();
         cur.items.push_back(std::move(item));
@@ -2358,7 +2360,7 @@ bool BookSession::PaginateChapter(int chapter, BookPageStore& built, const Layou
     const lv_coord_t line_h = LayoutLineHeight();
     const auto layout = LineLayout();
     int row = 0;
-    bool previous_title = false;
+    bool previous_title = false, previous_boxed = false, block_boxed = false;
     std::string line;
     VerticalBreakState breaks;
     TextSpacingState spacing;
@@ -2369,11 +2371,14 @@ bool BookSession::PaginateChapter(int chapter, BookPageStore& built, const Layou
     ZipReader image_source;
     auto flush_line = [&](bool title, bool justify = false) {
         if (line.empty()) return true;
-        const bool indent = first_line && !title;
+        const bool indent = first_line && !title && !block_boxed;
         if (indent) StripLeadingParaWs(line);
-        const lv_coord_t gap = first_line ? ReaderParagraphGap(para_gap_, previous_title) : 0;
+        const lv_coord_t gap = first_line ?
+            ReaderParagraphGapBoxed(para_gap_, previous_title, block_boxed, previous_boxed, false) : 0;
+        const lv_coord_t top_gap = first_line ?
+            ReaderParagraphGapBoxed(para_gap_, previous_title, block_boxed, previous_boxed, true) : 0;
         const bool ok = FlushLineToPage(line, built, cur, y, layout, row, gap,
-            indent, title, first_line, block_index, line_begin, offset, justify);
+            indent, title, first_line, block_index, line_begin, offset, justify, block_boxed, top_gap);
         if (preview && !built.empty()) preview_full = true;
         first_line = false; line_w = 0; breaks = {}; spacing = {};
         return ok && !preview_full;
@@ -2433,6 +2438,9 @@ bool BookSession::PaginateChapter(int chapter, BookPageStore& built, const Layou
             if (offset < preview->source_offset) return true;
         }
         if (block.kind == ContentKind::kText) {
+            block_boxed = block.boxed && !vertical_writing_;
+            const lv_coord_t wrap_w = block_boxed ?
+                std::max<lv_coord_t>(line_h, viewport_w_ - 2 * kReaderBoxInset) : viewport_w_;
             if (block.chapter_title && !epub_ && !cur.items.empty()) {
                 if (!built.Push(std::move(cur))) return false;
                 if (preview) { preview_full = true; return false; }
@@ -2458,11 +2466,11 @@ bool BookSession::PaginateChapter(int chapter, BookPageStore& built, const Layou
                 lv_coord_t width = LayoutGlyphWidth(cp);
                 if ((cp == 0x20 || cp == 0xA0) && width <= 0) width = std::max<lv_coord_t>(1, line_h / 3);
                 TextSpacingState candidate_spacing = spacing;
-                if (!vertical_writing_ && line_w + width > viewport_w_) ObserveTextGlyph(candidate_spacing, glyph_font_, cp, text_style_.letter_gap);
+                if (!vertical_writing_ && line_w + width > wrap_w) ObserveTextGlyph(candidate_spacing, glyph_font_, cp, text_style_.letter_gap);
                 VerticalBreakState candidate = breaks;
                 candidate.Observe(cp, offset, line.size());
-                if (!line.empty() && ((line_w + width > viewport_w_ && (vertical_writing_ ||
-                    !CanFitTrailingPunctuation(cp, line_w + width, viewport_w_, candidate_spacing))) ||
+                if (!line.empty() && ((line_w + width > wrap_w && (vertical_writing_ ||
+                    !CanFitTrailingPunctuation(cp, line_w + width, wrap_w, candidate_spacing))) ||
                     line.size() + n > kMaxLineSourceBytes)) {
                     if (candidate.valid && candidate.offset < offset) {
                         const uint32_t cut = candidate.offset;
@@ -2487,7 +2495,7 @@ bool BookSession::PaginateChapter(int chapter, BookPageStore& built, const Layou
                         }
                     } else if (!flush_line(block.chapter_title, true)) return false;
                 }
-                if (line.empty()) { line_begin = offset; line_w = first_line && !block.chapter_title ? LayoutIndentWidth() : 0; }
+                if (line.empty()) { line_begin = offset; line_w = first_line && !block.chapter_title && !block_boxed ? LayoutIndentWidth() : 0; }
                 if (!vertical_writing_) ObserveTextGlyph(spacing, glyph_font_, cp, text_style_.letter_gap);
                 breaks.Observe(cp, offset, line.size());
                 line.append(block.text.data() + i, n); line_w += width; i += n; offset += n;
@@ -2496,9 +2504,11 @@ bool BookSession::PaginateChapter(int chapter, BookPageStore& built, const Layou
             if (!block.continues) {
                 if (!line.empty() && !flush_line(block.chapter_title)) return false;
                 previous_title = block.chapter_title;
+                previous_boxed = block_boxed;
             }
             return true;
         }
+        block_boxed = false;
         if (!apply_epub_breaks(false)) return false;
         int img_w = physical_w_, img_h = physical_h_;
         const bool full_image = page_images_mode_ || vertical_writing_;
@@ -2529,6 +2539,7 @@ bool BookSession::PaginateChapter(int chapter, BookPageStore& built, const Layou
         item.image_href = std::move(block.image_href); item.image_w = img_w; item.image_h = img_h;
         cur.items.push_back(std::move(item)); y += img_h;
         previous_title = false;
+        previous_boxed = false;
         if (full_image) {
             if (!built.Push(std::move(cur))) return false;
             if (preview) { preview_full = true; return false; }
@@ -2639,7 +2650,7 @@ bool BookSession::CountChapterPages(int chapter, int& out_pages) const {
 
 namespace {
 
-constexpr uint32_t kChapterPageCacheVersion = 17; // 17: justify Latin text at spaces only
+constexpr uint32_t kChapterPageCacheVersion = 18; // 18: framed boxes for class="ap-note"
 
 #pragma pack(push, 1)
 struct ChapterPageHdr {

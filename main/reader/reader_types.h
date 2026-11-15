@@ -41,6 +41,7 @@ struct ContentBlock {
     bool chapter_title = false; // 章名段：分页后加粗居中；可含「第N章」换行接章节名
     bool continuation = false; // 同一段正文的后续片段
     bool continues = false; // 此片段之后同一段正文还有内容
+    bool boxed = false; // inside an element with class "ap-note": drawn inside a framed box
 };
 
 using ContentBlockSink = std::function<bool(ContentBlock&&)>; // 同步消费正文，返回 false 停止读取
@@ -61,6 +62,7 @@ struct PageItem {
     // 章名行：加粗居中；「第N章」与章节名可分行；误识别也不丢句
     bool chapter_title = false;
     bool justify = false; // 容量折行的正文续行或续列，两端对齐；段末和章名不拉伸
+    bool boxed = false; // line of a framed note box (horizontal layout only)
 };
 
 struct Page {
@@ -81,6 +83,9 @@ constexpr lv_coord_t kReaderParaGapDefault = 56; // 普通段落在行距之外�
 constexpr lv_coord_t kReaderChapterTitleAfterGap = 10; // 章名与后文额外间距
 constexpr int kReaderUnderlineGap = 2; // 字形与横排下划线或竖排装饰线之间的净空像素数
 constexpr int kReaderUnderlineThickness = 2; // 横排下划线的像素线宽
+constexpr lv_coord_t kReaderBoxInset = 22; // boxed lines: text inset from each column edge (border + padding)
+constexpr lv_coord_t kReaderBoxGap = 24; // extra space before a box, after a box, and above a box at page top
+constexpr int kReaderBoxBorder = 2; // box frame thickness in pixels
 
 inline int ReaderGlyphInkBottom(const lv_font_t* font, const lv_font_glyph_dsc_t& glyph) {
     return static_cast<int>(font->line_height) - static_cast<int>(font->base_line) - glyph.ofs_y - 1;
@@ -123,6 +128,14 @@ inline TextLineLayout MakeTextLineLayout(const lv_font_t* font, lv_coord_t exten
 inline lv_coord_t ReaderParagraphGap(lv_coord_t para_gap, bool previous_title) {
     return static_cast<lv_coord_t>(std::max<lv_coord_t>(0, para_gap) +
         (previous_title ? kReaderChapterTitleAfterGap : 0));
+}
+
+/** @brief Gap before a paragraph's first line, adding room for a box frame where boxed state changes. */
+inline lv_coord_t ReaderParagraphGapBoxed(lv_coord_t para_gap, bool previous_title, bool boxed, bool previous_boxed,
+                                          bool page_top) {
+    if (page_top) return boxed ? kReaderBoxGap : 0;
+    return static_cast<lv_coord_t>(ReaderParagraphGap(para_gap, previous_title) +
+        (boxed != previous_boxed ? kReaderBoxGap : 0));
 }
 
 enum class ImageDecodeError : uint8_t {

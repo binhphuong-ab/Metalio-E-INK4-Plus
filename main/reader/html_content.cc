@@ -185,6 +185,7 @@ bool HtmlBlockParser::Emit(bool more) {
     if (text_.empty() && !continuation_) return true;
     ContentBlock block;
     block.chapter_title = in_heading_;
+    block.boxed = boxed_nest_ > 0;
     block.text.swap(text_); block.continuation = continuation_; block.continues = more;
     const uint32_t length = block.text.size();
     if (!sink_(std::move(block))) return false;
@@ -232,6 +233,18 @@ static bool HasAttr(const char* p, const char* end, const char* attr) {
         if (static_cast<size_t>(end - a) < n || strncasecmp(a, attr, n) != 0) continue;
         const char after = a + n < end ? a[n] : '\0';
         if (after == '\0' || after == '=' || after == '/' || std::isspace(static_cast<unsigned char>(after))) return true;
+    }
+    return false;
+}
+
+// True when the class attribute holds `token` as a whole whitespace-separated word.
+static bool HasClassToken(const char* begin, const char* end, const char* token) {
+    const std::string cls = ToLower(ReadAttrValue(begin, end, "class"));
+    const size_t n = std::strlen(token);
+    for (size_t i = cls.find(token); i != std::string::npos; i = cls.find(token, i + 1)) {
+        const bool left = i == 0 || std::isspace(static_cast<unsigned char>(cls[i - 1]));
+        const bool right = i + n == cls.size() || std::isspace(static_cast<unsigned char>(cls[i + n]));
+        if (left && right) return true;
     }
     return false;
 }
@@ -285,6 +298,16 @@ bool HtmlBlockParser::Tag() {
     else if (name == "script") in_script_ = !closing;
     else if (name == "style") in_style_ = !closing;
     else if (!in_head_ && !in_script_ && !in_style_) {
+        if (!closing && !self_closing && !name.empty()) {
+            if (boxed_nest_ > 0) {
+                if (name == boxed_tag_) ++boxed_nest_;
+            } else if (HasClassToken(p, end, "ap-note")) {
+                // The box starts a fresh block so preceding text stays outside the frame.
+                if (!Emit(false)) return false;
+                boxed_tag_ = name;
+                boxed_nest_ = 1;
+            }
+        }
         const bool heading = name.size() == 2 && name[0] == 'h' && name[1] >= '1' && name[1] <= '6';
         if (heading && !closing) in_heading_ = text_.empty() && !continuation_;
         if (!closing && (name == "img" || name == "image")) {
@@ -309,6 +332,11 @@ bool HtmlBlockParser::Tag() {
             if (!Append('\n')) return false;
             Anchor(begin, end);
         } else if (!closing) Anchor(begin, end);
+        if (closing && boxed_nest_ > 0 && name == boxed_tag_) {
+            // Flush boxed text (inline box roots too) before leaving the box.
+            if (boxed_nest_ == 1 && !Emit(false)) return false;
+            if (--boxed_nest_ == 0) boxed_tag_.clear();
+        }
     }
     return true;
 }

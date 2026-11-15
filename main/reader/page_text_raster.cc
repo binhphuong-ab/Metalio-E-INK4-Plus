@@ -123,6 +123,19 @@ void DrawUnderline(RasterImage& img, int x0, int x1, int y, int mode) {
     }
 }
 
+// Frame around boxed lines: sides always, top/bottom only where the box starts/ends on this page.
+void DrawBoxFrame(RasterImage& img, int top, int bottom, bool draw_top, bool draw_bottom) {
+    const int w = img.width, h = img.height;
+    top = std::max(0, top);
+    bottom = std::min(h - 1, bottom);
+    if (bottom <= top || w <= 2 * kReaderBoxBorder) return;
+    for (int t = 0; t < kReaderBoxBorder; ++t) {
+        for (int y = top; y <= bottom; ++y) { PlotInk(img, t, y); PlotInk(img, w - 1 - t, y); }
+        if (draw_top) for (int x = 0; x < w; ++x) PlotInk(img, x, top + t);
+        if (draw_bottom) for (int x = 0; x < w; ++x) PlotInk(img, x, bottom - t);
+    }
+}
+
 bool DrawUtf8Line(RasterImage& img, const lv_font_t* font, int x, int line_top, const char* utf8,
                   bool faux_bold, int* out_end_x, bool vertical = false, bool antialias = false,
                   int* out_ink_bottom = nullptr, const TextLineSpacing& spacing = {}, int letter_gap = 0) {
@@ -249,17 +262,18 @@ int EstimatePageTextHeight(const Page& page, const lv_font_t* font, int spacing_
     const auto layout = MakeTextLineLayout(font, max_h, spacing_percent, false, line_gap);
     if (layout.count <= 0) return 0;
     int row = 0, y = 0;
-    bool any = false, previous_title = false;
+    bool any = false, previous_title = false, previous_boxed = false, box_closes = false;
     for (const auto& item : page.items) {
         if (item.kind != ContentKind::kText) {
             if (item.image_h <= 0 || item.image_h > max_h - y) return 0;
             y += item.image_h;
             previous_title = false;
+            previous_boxed = box_closes = false;
             any = true;
             continue;
         }
         if (item.text.empty()) continue;
-        if (item.para_gap_before && any) y += ReaderParagraphGap(para_gap, previous_title);
+        if (item.para_gap_before) y += ReaderParagraphGapBoxed(para_gap, previous_title, item.boxed, previous_boxed, !any);
         int lines = 1;
         if (item.chapter_title) for (size_t i = 0; i + 1 < item.text.size(); ++i) if (item.text[i] == '\n') ++lines;
         while (lines-- > 0) {
@@ -267,8 +281,12 @@ int EstimatePageTextHeight(const Page& page, const lv_font_t* font, int spacing_
             y += layout.CellHeight(row++);
         }
         previous_title = item.chapter_title;
+        if (item.para_gap_before || !item.boxed) previous_boxed = item.boxed;
+        box_closes = item.boxed && !item.justify;
         any = true;
     }
+    // Room for the bottom frame of a box that ends on this page.
+    if (any && box_closes) y = std::min(max_h, y + static_cast<int>(kReaderBoxGap / 2) + kReaderBoxBorder);
     return any ? y : 0;
 }
 
@@ -300,19 +318,34 @@ bool RasterPageTextToL8(const Page& page, const lv_font_t* font, int spacing_per
     const lv_coord_t indent_px = ParaIndentPadPx(font, style.indent_chars);
     lv_coord_t y = 0;
     int row = 0;
-    bool any = false, previous_title = false;
+    bool any = false, previous_title = false, previous_boxed = false;
+    int box_top = -1, box_bottom = -1; // open box run on this page
+    bool box_has_top = false, box_last_justify = false;
+    auto close_box = [&](bool page_end) {
+        if (box_top < 0) return;
+        const bool closes = !(page_end && box_last_justify);
+        DrawBoxFrame(out, box_top, closes ? box_bottom + kReaderBoxGap / 2 : out.height - 1, box_has_top, closes);
+        box_top = -1;
+    };
 
     for (const auto& item : page.items) {
         if (item.kind != ContentKind::kText) {
+            close_box(false);
             if (image_tops) image_tops->push_back(y);
             y += item.image_h;
             previous_title = false;
+            previous_boxed = false;
             any = true;
             continue;
         }
         if (item.text.empty()) continue;
-        if (item.para_gap_before && any) {
-            y = static_cast<lv_coord_t>(y + ReaderParagraphGap(para_gap, previous_title));
+        if (item.para_gap_before) {
+            y = static_cast<lv_coord_t>(y + ReaderParagraphGapBoxed(para_gap, previous_title, item.boxed, previous_boxed, !any));
+        }
+        if (!item.boxed || (item.para_gap_before && box_top >= 0)) close_box(false);
+        if (item.boxed && box_top < 0) {
+            box_has_top = item.para_gap_before;
+            box_top = box_has_top ? y - kReaderBoxGap / 2 : 0;
         }
         if (row >= layout.count || y + layout.CellHeight(row) > page_h) return false;
 
@@ -347,7 +380,8 @@ bool RasterPageTextToL8(const Page& page, const lv_font_t* font, int spacing_per
             previous_title = true;
             continue;
         }
-        const int available = page_w - (item.para_indent && !item.chapter_title ? indent_px : 0);
+        const int box_inset = item.boxed ? kReaderBoxInset : 0;
+        const int available = page_w - 2 * box_inset - (item.para_indent && !item.chapter_title ? indent_px : 0);
         const auto spacing = MakeTextLineSpacing(font, item.text, available, item.justify && !item.chapter_title, false, style.letter_gap);
         if (item.chapter_title) {
             const lv_coord_t tw = spacing.width;
@@ -355,6 +389,7 @@ bool RasterPageTextToL8(const Page& page, const lv_font_t* font, int spacing_per
         } else if (item.para_indent) {
             text_x = indent_px;
         }
+        text_x = static_cast<lv_coord_t>(text_x + box_inset);
 
         int end_x = text_x;
         int ink_bottom = -1;
@@ -370,7 +405,10 @@ bool RasterPageTextToL8(const Page& page, const lv_font_t* font, int spacing_per
         y += layout.CellHeight(row++);
         any = true;
         previous_title = item.chapter_title;
+        if (item.para_gap_before || !item.boxed) previous_boxed = item.boxed;
+        if (item.boxed) { box_bottom = y; box_last_justify = item.justify; }
     }
+    close_box(true);
 
     FinishTextRaster(out, antialias, style.aa_strength);
     return any;
@@ -492,16 +530,17 @@ bool CollectPageWords(const Page& page, const lv_font_t* font, int spacing_perce
     const auto layout = MakeTextLineLayout(font, page_h, spacing_percent, false, style.line_gap);
     const lv_coord_t indent_px = ParaIndentPadPx(font, style.indent_chars);
     int y = 0, row = 0;
-    bool any = false, previous_title = false;
+    bool any = false, previous_title = false, previous_boxed = false;
     for (const auto& item : page.items) {
         if (item.kind != ContentKind::kText) {
             y += item.image_h;
             previous_title = false;
+            previous_boxed = false;
             any = true;
             continue;
         }
         if (item.text.empty()) continue;
-        if (item.para_gap_before && any) y += ReaderParagraphGap(para_gap, previous_title);
+        if (item.para_gap_before) y += ReaderParagraphGapBoxed(para_gap, previous_title, item.boxed, previous_boxed, !any);
         if (row >= layout.count) break;
         if (item.chapter_title && item.text.find('\n') != std::string::npos) {
             size_t begin = 0;
@@ -521,17 +560,20 @@ bool CollectPageWords(const Page& page, const lv_font_t* font, int spacing_perce
             previous_title = true;
             continue;
         }
-        const int available = page_w - (item.para_indent && !item.chapter_title ? indent_px : 0);
+        const int box_inset = item.boxed ? kReaderBoxInset : 0;
+        const int available = page_w - 2 * box_inset - (item.para_indent && !item.chapter_title ? indent_px : 0);
         const auto spacing = MakeTextLineSpacing(font, item.text, available, item.justify && !item.chapter_title, false, style.letter_gap);
         int text_x = 0;
         if (item.chapter_title) text_x = spacing.width < page_w ? (page_w - spacing.width) / 2 : 0;
         else if (item.para_indent) text_x = indent_px;
+        text_x += box_inset;
         const int cell = layout.CellHeight(row);
         MeasureWordsOnLine(font, text_x, item.text, spacing, style.letter_gap, y + layout.TextOffset(row), y, y + cell, out);
         y += cell;
         ++row;
         any = true;
         previous_title = item.chapter_title;
+        if (item.para_gap_before || !item.boxed) previous_boxed = item.boxed;
     }
     return !out.empty();
 }

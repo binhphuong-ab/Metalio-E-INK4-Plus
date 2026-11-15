@@ -40,6 +40,9 @@ private:
     // tag name of its root and nesting depth of that same tag name.
     std::string hidden_tag_;
     int hidden_nest_ = 0;
+    // Subtree whose blocks render inside a framed box (class token "ap-note").
+    std::string boxed_tag_;
+    int boxed_nest_ = 0;
 };
 
 /** @brief 解码常用 HTML 实体及 Unicode 数字引用。 */

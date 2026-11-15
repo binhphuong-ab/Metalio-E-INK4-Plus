@@ -40,6 +40,7 @@ inline lv_coord_t PageTextColumnWidth(const Page& page, const lv_font_t* font, l
         if (item.kind != ContentKind::kText) return max_width;
         if (item.text.empty()) continue;
         if (item.justify && !item.chapter_title) return max_width;
+        if (item.boxed) return max_width; // the frame spans the full column
         const int indent = item.para_indent && !item.chapter_title ? ParaIndentPadPx(font, style.indent_chars) : 0;
         size_t begin = 0;
         do {
