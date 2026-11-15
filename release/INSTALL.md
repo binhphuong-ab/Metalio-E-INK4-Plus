@@ -1,7 +1,7 @@
-# Metalio E-INK4 Plus — Offline English firmware `2.0.79-en.3`
+# Metalio E-INK4 Plus — Offline English firmware `2.0.79-en.4`
 
 > This folder holds the installer scripts only. Download the ready-to-flash zip from
-> [Releases](https://github.com/binhphuong-ab/Metalio-E-INK4-Plus/releases/tag/v2.0.79-en.3).
+> [Releases](https://github.com/binhphuong-ab/Metalio-E-INK4-Plus/releases/tag/v2.0.79-en.4).
 > Thư mục này chỉ chứa script; tải gói zip có sẵn file nạp ở trang Releases.
 
 **English** · [Tiếng Việt](#tiếng-việt)
@@ -25,6 +25,8 @@ made for reading in **English and Vietnamese**. Not an official Metalio/CloudZao
 - **Back to your page** (new in en.3) — switch the reader off while reading and it reopens
   the same book at the same page when switched on. The standby screen can show the page
   you are reading, too. See [Standby on the reading page](#standby-on-the-reading-page).
+- **Framed notes** (new in en.4) — paragraphs marked `class="ap-note"` in an EPUB are drawn
+  inside a box. See [Framed notes in books](#framed-notes-in-books).
 
 ## Requirements
 
@@ -51,7 +53,7 @@ made for reading in **English and Vietnamese**. Not an official Metalio/CloudZao
 **Windows:** install esptool, find the COM port in Device Manager, back up first, then:
 ```
 esptool --port COM5 read-flash 0 ALL backup.bin
-esptool --port COM5 write-flash 0x80000 metalio-e-ink4-plus-2.0.79-en.3-app.bin 0xae4000 metalio-e-ink4-plus-2.0.79-en.3-fontpack.bin
+esptool --port COM5 write-flash 0x80000 metalio-e-ink4-plus-2.0.79-en.4-app.bin 0xae4000 metalio-e-ink4-plus-2.0.79-en.4-fontpack.bin
 ```
 
 ## Reading fonts (optional)
@@ -93,6 +95,16 @@ Power-on resume needs no setup: if a book is open when the reader is switched of
 from standby), the next power-on goes straight back to that page (Home shows for about a
 second first). Switched off anywhere else, it starts on Home as usual.
 
+## Framed notes in books
+
+Any EPUB element whose `class` includes `ap-note` (a `<p>`, or a `<div>` holding several
+paragraphs) is drawn inside a thin frame, inset from the margins. The text still follows your
+font size and the dictionary works inside the box; a box that runs onto the next page stays
+open at the page break. Useful for study editions with added explanations, e.g.
+`<p class="ap-note"><b>Explainer: </b>…</p>`.
+
+After upgrading, each book re-paginates once the first time you open it (slightly slower).
+
 ## Notes
 
 - Wi-Fi is **2.4 GHz only**. Connect once so the clock can sync (NTP); there is no
@@ -122,6 +134,7 @@ dành cho người đọc sách **tiếng Anh và tiếng Việt**. Không phả
 - **Từ điển offline** (mới ở en.2): khi đọc, **đè giữ Home**, chạm vào từ, nghĩa hiện toàn màn hình.
 - **Trở lại trang đang đọc** (mới ở en.3): tắt máy khi đang đọc, bật lên máy mở lại đúng sách,
   đúng trang. Màn hình chờ cũng có thể giữ nguyên trang đang đọc.
+- **Khung ghi chú** (mới ở en.4): đoạn có `class="ap-note"` trong EPUB được vẽ trong một khung.
 
 ### Yêu cầu
 
@@ -177,6 +190,15 @@ giữ trang đang đọc bên dưới. Chọn **Clear selection** để quay v�
 
 Mở lại sách khi bật máy không cần cài gì: tắt máy lúc đang mở sách (kể cả từ màn hình chờ), lần
 bật sau máy về thẳng trang đó (Home hiện thoáng khoảng 1 giây). Tắt ở chỗ khác thì vẫn vào Home.
+
+### Khung ghi chú trong sách
+
+Phần tử EPUB nào có `class` chứa `ap-note` (một `<p>`, hoặc một `<div>` gồm nhiều đoạn) sẽ được vẽ
+trong khung viền mảnh, thụt vào so với lề. Chữ vẫn theo cỡ font đã chọn, vẫn tra từ điển được trong
+khung; khung vắt sang trang sau thì để hở ở chỗ ngắt trang. Hợp với sách học có chèn đoạn giải thích,
+ví dụ `<p class="ap-note"><b>Explainer: </b>…</p>`.
+
+Sau khi nâng cấp, mỗi cuốn sách sẽ phân trang lại một lần ở lần mở đầu tiên (hơi chậm hơn).
 
 ### Lưu ý
 
