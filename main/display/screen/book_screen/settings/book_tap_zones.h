@@ -3,7 +3,7 @@
 #include <cstdint>
 
 // 正文 3×3 触摸分区（NVS namespace "reader" / key "tap_zones"）：
-// 行主序 cell 0..8；默认左列上一页、中列菜单、右列下一页。
+// 行主序 cell 0..8；默认左列上一页、中列与右列下一页（菜单只走 AI/BOOT 键）。
 // 动作：无 / 上一页 / 菜单 / 下一页 / 返回 / 目录 / 全刷一次 / 书签 / 字体 / 设置。
 // 读走 RAM 缓存；首次 Ensure 须在 DRAM 栈；落盘在内部 RAM 栈任务。
 
@@ -30,10 +30,10 @@ void BookTapZonesEnsureLoaded();
 /** @brief 取某格动作 */
 BookTapZoneAction BookTapZonesActionAt(int cell);
 /**
- * @brief 更新分区动作并异步请求保存，至少保留一个菜单唤醒区域
+ * @brief 更新分区动作并异步请求保存（菜单分区可选：AI/BOOT 键总能唤醒菜单）
  * @param cell 分区索引，范围为 0 至 kBookTapZoneCellCount - 1
  * @param action 分区动作
- * @return 配置被接受时返回 true，参数无效或移除最后一个菜单分区时返回 false
+ * @return 配置被接受时返回 true，参数无效时返回 false
  * @note 返回 true 不表示异步保存已完成
  */
 bool BookTapZonesSetAction(int cell, BookTapZoneAction action);

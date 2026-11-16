@@ -15,22 +15,25 @@ static constexpr const char* TAG = "BookTapZones";
 static constexpr const char* kNvsNs = "reader";
 static constexpr const char* kNvsKey = "tap_zones";
 
-// 行主序：col0=Prev, col1=Menu, col2=Next
+// Row-major: col0=Prev, col1=Next, col2=Next. No touch zone opens the menu by default:
+// the settings sheet opens with the AI (BOOT) key, so a tap or a hold mid-page
+// cannot pop it up by mistake while turning pages.
 static constexpr uint8_t kDefaultCells[kBookTapZoneCellCount] = {
     static_cast<uint8_t>(BookTapZoneAction::kPrev),
-    static_cast<uint8_t>(BookTapZoneAction::kMenu),
+    static_cast<uint8_t>(BookTapZoneAction::kNext),
     static_cast<uint8_t>(BookTapZoneAction::kNext),
     static_cast<uint8_t>(BookTapZoneAction::kPrev),
-    static_cast<uint8_t>(BookTapZoneAction::kMenu),
+    static_cast<uint8_t>(BookTapZoneAction::kNext),
     static_cast<uint8_t>(BookTapZoneAction::kNext),
     static_cast<uint8_t>(BookTapZoneAction::kPrev),
-    static_cast<uint8_t>(BookTapZoneAction::kMenu),
+    static_cast<uint8_t>(BookTapZoneAction::kNext),
     static_cast<uint8_t>(BookTapZoneAction::kNext),
 };
+// Stock default layout (Prev | Menu | Next); a saved copy of it is read as "default".
+static constexpr const char* kLegacyDefaultPacked = "123123123";
 
 static_assert(kBookTapZoneCellCount == 9, "3x3");
 static_assert(kDefaultCells[0] == static_cast<uint8_t>(BookTapZoneAction::kPrev), "left col");
-static_assert(kDefaultCells[1] == static_cast<uint8_t>(BookTapZoneAction::kMenu), "mid col");
 static_assert(kDefaultCells[2] == static_cast<uint8_t>(BookTapZoneAction::kNext), "right col");
 
 static uint8_t s_cells[kBookTapZoneCellCount] = {};
@@ -45,7 +48,6 @@ static bool ParsePacked(const std::string& packed, uint8_t* out) {
         return false;
     }
     uint8_t tmp[kBookTapZoneCellCount];
-    bool has_menu = false;
     for (int i = 0; i < kBookTapZoneCellCount; ++i) {
         const char c = packed[static_cast<size_t>(i)];
         if (c < '0' || c > '9') {
@@ -56,10 +58,6 @@ static bool ParsePacked(const std::string& packed, uint8_t* out) {
             return false;
         }
         tmp[i] = v;
-        has_menu |= v == static_cast<uint8_t>(BookTapZoneAction::kMenu);
-    }
-    if (!has_menu) {
-        return false;
     }
     std::memcpy(out, tmp, sizeof(tmp));
     return true;
@@ -73,7 +71,9 @@ static void LoadFromNvs() {
     CopyDefault();
     Settings settings(kNvsNs, false);
     const std::string packed = settings.GetString(kNvsKey, "");
-    if (!packed.empty() && !ParsePacked(packed, s_cells)) {
+    if (packed == kLegacyDefaultPacked) {
+        ESP_LOGI(TAG, "nvs tap_zones = stock default, using new default");
+    } else if (!packed.empty() && !ParsePacked(packed, s_cells)) {
         ESP_LOGW(TAG, "nvs tap_zones invalid, using defaults");
     }
     s_ready = true;
@@ -152,14 +152,6 @@ bool BookTapZonesSetAction(int cell, BookTapZoneAction action) {
     }
     if (s_cells[cell] == v) {
         return true;
-    }
-    bool has_menu = false;
-    for (int i = 0; i < kBookTapZoneCellCount; ++i) {
-        has_menu |= (i == cell ? v : s_cells[i]) ==
-                    static_cast<uint8_t>(BookTapZoneAction::kMenu);
-    }
-    if (!has_menu) {
-        return false;
     }
     s_cells[cell] = v;
     StartPersist();
