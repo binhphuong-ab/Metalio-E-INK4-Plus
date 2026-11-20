@@ -163,9 +163,7 @@ struct RadioResult {
 RadioResult s_radio_result;
 
 void SetRadioStatus(const char* text) {
-    if (text == Lang::Strings::WIFI_DISABLED_RETRY) {
-        ScreenShowToast(text);
-    }
+    // No toast: the same text is shown in the centre label below.
     auto& st = Cloud_State();
     if (st.chrome.radio_status_lbl == nullptr) {
         return;

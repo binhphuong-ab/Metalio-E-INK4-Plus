@@ -217,10 +217,6 @@ void Network_WifiTeardownForScreen() {
 
 static void ScanOnce() {
     if (const char* reason = Network_WifiUnavailableReason()) {
-        if (reason == Lang::Strings::WIFI_DISABLED_RETRY) {
-            auto notify = [](void*) { ScreenShowToast(Lang::Strings::WIFI_DISABLED_RETRY); };
-            ScreenLvAsync(notify);
-        }
         Network_PostScanResult(reason);
         Network_PostScanBtnEnabled(true);
         return;
@@ -338,7 +334,6 @@ void Network_ScanTask(void*) {
 
 void Network_ScheduleScan() {
     if (const char* reason = Network_WifiUnavailableReason()) {
-        if (reason == Lang::Strings::WIFI_DISABLED_RETRY) ScreenShowToast(reason);
         Network_PostScanResult(reason);
         return;
     }
@@ -537,7 +532,6 @@ void Network_ConnectTask(void* arg) {
 
 void Network_ScheduleConnect(const std::string& ssid, const std::string& password) {
     if (const char* reason = Network_WifiUnavailableReason()) {
-        if (reason == Lang::Strings::WIFI_DISABLED_RETRY) ScreenShowToast(reason);
         Network_PostStatus(reason);
         return;
     }

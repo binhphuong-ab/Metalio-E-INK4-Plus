@@ -259,6 +259,16 @@ void ScheduleNetPrepAndFetch() {
         SetStatusTip(Lang::Strings::CLOUD_CONNECTING_NET, false);
         return;
     }
+    // Wi-Fi switched off: show the reason in the list area and skip EnsureNetworkReady,
+    // which would also pop the same text as a toast.
+    if (const char* reason = Board::GetInstance().GetNetworkErrorText(nullptr)) {
+        st.data.waiting_net = false;
+        st.data.error = reason;
+        SetStatusTip("", false);
+        RenderListPage();
+        ESP_LOGI(TAG, "ScheduleNetPrep: network unavailable (%s)", reason);
+        return;
+    }
     s_sync_gate.Reset();
     st.data.waiting_net = true;
     st.data.error.clear();
