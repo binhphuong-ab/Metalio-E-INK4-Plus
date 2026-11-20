@@ -1,7 +1,7 @@
-# Metalio E-INK4 Plus — Offline English firmware `2.0.79-en.4`
+# Metalio E-INK4 Plus — Offline English firmware `2.0.79-en.5`
 
 > This folder holds the installer scripts only. Download the ready-to-flash zip from
-> [Releases](https://github.com/binhphuong-ab/Metalio-E-INK4-Plus/releases/tag/v2.0.79-en.4).
+> [Releases](https://github.com/binhphuong-ab/Metalio-E-INK4-Plus/releases/tag/v2.0.79-en.5).
 > Thư mục này chỉ chứa script; tải gói zip có sẵn file nạp ở trang Releases.
 
 **English** · [Tiếng Việt](#tiếng-việt)
@@ -27,6 +27,9 @@ made for reading in **English and Vietnamese**. Not an official Metalio/CloudZao
   you are reading, too. See [Standby on the reading page](#standby-on-the-reading-page).
 - **Framed notes** (new in en.4) — paragraphs marked `class="ap-note"` in an EPUB are drawn
   inside a box. See [Framed notes in books](#framed-notes-in-books).
+- **Brightness panel** (new in en.5) — swipe down for a slim front-light panel: level in %,
+  −/+ in 1% steps, a slider and one-tap 5% / 50%. Taps on the page only turn pages; the
+  reading menu opens with the top-right key. See [Brightness panel and page taps](#brightness-panel-and-page-taps).
 
 ## Requirements
 
@@ -53,7 +56,7 @@ made for reading in **English and Vietnamese**. Not an official Metalio/CloudZao
 **Windows:** install esptool, find the COM port in Device Manager, back up first, then:
 ```
 esptool --port COM5 read-flash 0 ALL backup.bin
-esptool --port COM5 write-flash 0x80000 metalio-e-ink4-plus-2.0.79-en.4-app.bin 0xae4000 metalio-e-ink4-plus-2.0.79-en.4-fontpack.bin
+esptool --port COM5 write-flash 0x80000 metalio-e-ink4-plus-2.0.79-en.5-app.bin 0xae4000 metalio-e-ink4-plus-2.0.79-en.5-fontpack.bin
 ```
 
 ## Reading fonts (optional)
@@ -105,6 +108,21 @@ open at the page break. Useful for study editions with added explanations, e.g.
 
 After upgrading, each book re-paginates once the first time you open it (slightly slower).
 
+## Brightness panel and page taps
+
+Swipe down (on any screen, portrait or landscape) for the front-light panel:
+the level in %, **−/+** buttons that step 1% (hold to repeat), a slider, and **5%** / **50%**
+presets. In landscape it is a single slim row so the page stays readable. Tap outside it or
+swipe up to close. Warmth is still in **Settings → Front light**.
+
+While reading, taps on the page no longer open the menu (a long press used to open it by
+mistake when turning pages): the left third goes back, the rest goes forward. The reading
+menu opens with the **top-right key**. A tap-zone layout you customised is kept.
+
+Fixed in en.5: switching off (hold Power, or the automatic power-off after 30 minutes in
+standby) could restart the reader instead, so the screen lit up now and then while it was
+"off"; the "Wi-Fi is off" message no longer shows twice.
+
 ## Notes
 
 - Wi-Fi is **2.4 GHz only**. Connect once so the clock can sync (NTP); there is no
@@ -135,6 +153,9 @@ dành cho người đọc sách **tiếng Anh và tiếng Việt**. Không phả
 - **Trở lại trang đang đọc** (mới ở en.3): tắt máy khi đang đọc, bật lên máy mở lại đúng sách,
   đúng trang. Màn hình chờ cũng có thể giữ nguyên trang đang đọc.
 - **Khung ghi chú** (mới ở en.4): đoạn có `class="ap-note"` trong EPUB được vẽ trong một khung.
+- **Bảng độ sáng** (mới ở en.5): vuốt xuống là hiện bảng chỉnh đèn gọn gàng: số %, nút −/+ từng 1%,
+  thanh trượt và hai mức chọn nhanh 5% / 50%. Chạm vào trang sách chỉ để lật trang; menu đọc sách
+  mở bằng phím góc trên bên phải.
 
 ### Yêu cầu
 
@@ -199,6 +220,20 @@ khung; khung vắt sang trang sau thì để hở ở chỗ ngắt trang. Hợp 
 ví dụ `<p class="ap-note"><b>Explainer: </b>…</p>`.
 
 Sau khi nâng cấp, mỗi cuốn sách sẽ phân trang lại một lần ở lần mở đầu tiên (hơi chậm hơn).
+
+### Bảng độ sáng và chạm lật trang
+
+Vuốt xuống (ở bất kỳ màn hình nào, dọc hay ngang) để mở bảng đèn nền: số %, nút **−/+**
+mỗi lần 1% (giữ để chạy liên tục), thanh trượt và hai mức chọn nhanh **5%** / **50%**. Khi xoay ngang,
+bảng chỉ còn một hàng mảnh nên vẫn đọc được chữ bên dưới. Chạm ra ngoài hoặc vuốt lên để đóng. Tông màu
+đèn vẫn chỉnh trong **Settings → Front light**.
+
+Khi đọc, chạm vào trang không còn mở menu (trước đây đè lâu lúc lật trang hay bị mở nhầm): một phần ba
+bên trái lùi trang, phần còn lại sang trang. Menu đọc sách mở bằng **phím góc trên bên phải**. Nếu bạn đã
+tự chỉnh vùng chạm thì vẫn được giữ nguyên.
+
+Sửa lỗi ở en.5: tắt máy (giữ nút Power, hoặc tự tắt sau 30 phút ở màn hình chờ) có thể làm máy khởi động
+lại, nên màn hình thỉnh thoảng tự sáng lên dù đã "tắt"; thông báo "Wi-Fi is off" không còn hiện hai lần.
 
 ### Lưu ý
 
